@@ -14,26 +14,14 @@ from __future__ import annotations
 import os
 from typing import Optional
 
+import httpx
 import structlog
-from openai import AsyncOpenAI
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.orm import AnomalyEmbedding
 
 logger = structlog.get_logger(__name__)
-
-# Cached OpenAI async client for embeddings
-_embeddings_client: Optional[AsyncOpenAI] = None
-
-
-def _get_embeddings_client() -> AsyncOpenAI:
-    global _embeddings_client
-    if _embeddings_client is None:
-        _embeddings_client = AsyncOpenAI(
-            api_key=os.getenv("OPENAI_API_KEY", "dummy-key")
-        )
-    return _embeddings_client
 
 
 # ---------------------------------------------------------------------------
@@ -43,17 +31,34 @@ def _get_embeddings_client() -> AsyncOpenAI:
 
 async def embed_text(text_input: str) -> Optional[list[float]]:
     """
-    Generate a text embedding vector using OpenAI's embedding model.
+    Generate a text embedding vector using OpenRouter's embedding API.
     Returns None if the API call fails (graceful degradation).
     """
-    model = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
+    base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+    api_key = os.getenv("OPENROUTER_API_KEY", "")
+    model = os.getenv("EMBEDDING_MODEL", "openai/text-embedding-3-small")
+
+    if not api_key:
+        logger.warning("vector_store.embed_failed", reason="OPENROUTER_API_KEY not set")
+        return None
+
     try:
-        client = _get_embeddings_client()
-        response = await client.embeddings.create(
-            model=model,
-            input=text_input[:8000],  # Truncate to avoid token limit
-        )
-        return response.data[0].embedding
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{base_url}/embeddings",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": model,
+                    "input": text_input[:8000],  # Truncate to avoid token limit
+                },
+                timeout=30.0,
+            )
+            response.raise_for_status()
+            data = response.json()
+            return data["data"][0]["embedding"]
     except Exception as exc:
         logger.warning("vector_store.embed_failed", error=str(exc))
         return None

@@ -176,13 +176,13 @@ st.divider()
 # ---------------------------------------------------------------------------
 # Detailed Anomaly Cards
 # ---------------------------------------------------------------------------
-with st.expander("🔍 Anomaly Detail Cards", expanded=False):
-    if not all_anomalies:
-        st.info("No anomalies to display.")
-    else:
-        for anomaly in all_anomalies[:20]:
-            if render_anomaly_card(anomaly, show_approve_button=False):
-                pass  # approval handled separately below
+st.subheader("🔍 Anomaly Detail Cards")
+if not all_anomalies:
+    st.info("No anomalies to display.")
+else:
+    for anomaly in all_anomalies[:20]:
+        if render_anomaly_card(anomaly, show_approve_button=False):
+            pass  # approval handled separately below
 
 st.divider()
 
