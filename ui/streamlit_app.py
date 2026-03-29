@@ -12,7 +12,7 @@ from ui.components.api_client import get_health, get_summary
 
 st.set_page_config(
     page_title="CostSense AI",
-    page_icon="💡",
+    page_icon="�",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -20,7 +20,7 @@ st.set_page_config(
 # ---------------------------------------------------------------------------
 # Header
 # ---------------------------------------------------------------------------
-st.title("💡 CostSense AI")
+st.title("CostSense AI")
 st.subheader("Autonomous Cost Intelligence Platform")
 st.caption(
     "Multi-agent system that detects enterprise cost leakage, scores anomalies by financial "
@@ -38,10 +38,10 @@ col_status, col_nav = st.columns([1, 2])
 
 with col_status:
     if health:
-        st.success(f"✅ API Online — v{health.get('version', '?')}")
+        st.success(f"API Online — v{health.get('version', '?')}")
         st.metric("Events Processed", health.get("events_processed", 0))
     else:
-        st.error("⚠️ API Offline — start `python run.py` on port 8000")
+        st.error("API Offline — start `python run.py` on port 8000")
 
 with col_nav:
     st.markdown("""
@@ -50,11 +50,11 @@ with col_nav:
 
     | Page | Description |
     |------|-------------|
-    | **📥 Data Input** | Generate synthetic data or upload your own CSV |
-    | **⚙️ Pipeline** | Watch agents process data in real time |
-    | **🚨 Anomalies** | Review detected anomalies + approve actions |
-    | **🔍 Process Logs** | Deep-dive into per-agent input/output trace |
-    | **💼 CFO Summary** | Executive recovery metrics and top findings |
+    | **Data Input** | Generate synthetic data or upload your own CSV |
+    | **Pipeline** | Watch agents process data in real time |
+    | **Anomalies** | Review detected anomalies + approve actions |
+    | **Process Logs** | Deep-dive into per-agent input/output trace |
+    | **CFO Summary** | Executive recovery metrics and top findings |
     """)
 
 st.divider()
@@ -83,7 +83,7 @@ if health:
 # ---------------------------------------------------------------------------
 # Architecture diagram
 # ---------------------------------------------------------------------------
-with st.expander("🏗️ System Architecture", expanded=False):
+with st.expander("System Architecture", expanded=False):
     st.markdown("""
     ### Multi-Agent Event Bus Architecture
 

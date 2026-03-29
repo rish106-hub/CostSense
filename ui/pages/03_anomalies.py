@@ -17,9 +17,9 @@ from ui.components.api_client import (
     get_pending_approval,
 )
 
-st.set_page_config(page_title="Anomalies — CostSense AI", page_icon="🚨", layout="wide")
+st.set_page_config(page_title="Anomalies — CostSense AI", page_icon="�", layout="wide")
 
-st.title("🚨 Anomaly Dashboard")
+st.title("Anomaly Dashboard")
 st.caption("All detected anomalies, ranked by Action Priority Score (APS).")
 
 # ---------------------------------------------------------------------------
@@ -27,7 +27,7 @@ st.caption("All detected anomalies, ranked by Action Priority Score (APS).")
 # ---------------------------------------------------------------------------
 health = get_health()
 if health is None:
-    st.error("⚠️ Cannot reach API server.")
+    st.error("Cannot reach API server.")
     st.stop()
 
 # ---------------------------------------------------------------------------
@@ -176,7 +176,7 @@ st.divider()
 # ---------------------------------------------------------------------------
 # Detailed Anomaly Cards
 # ---------------------------------------------------------------------------
-st.subheader("🔍 Anomaly Detail Cards")
+st.subheader("Anomaly Detail Cards")
 if not all_anomalies:
     st.info("No anomalies to display.")
 else:
@@ -189,7 +189,7 @@ st.divider()
 # ---------------------------------------------------------------------------
 # Approval Gate
 # ---------------------------------------------------------------------------
-st.subheader("✅ Approval Gate")
+st.subheader("Approval Gate")
 st.caption("Anomalies awaiting CFO sign-off before automated action is taken.")
 
 pending_resp = get_pending_approval()
@@ -209,7 +209,7 @@ else:
             with st.spinner("Submitting approval…"):
                 result = approve_anomaly(anomaly_id, approved_by=approved_by, notes=notes or None)
             if result and "anomaly_id" in result:
-                st.success(f"✅ Anomaly `{anomaly_id[:8]}…` approved!")
+                st.success(f"Anomaly `{anomaly_id[:8]}…` approved!")
                 st.rerun()
             else:
                 st.error(f"Approval failed: {result}")

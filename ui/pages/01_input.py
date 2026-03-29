@@ -21,21 +21,21 @@ from ui.components.api_client import (
     ingest_demo,
 )
 
-st.set_page_config(page_title="Data Input — CostSense AI", page_icon="📥", layout="wide")
+st.set_page_config(page_title="Data Input — CostSense AI", page_icon="�", layout="wide")
 
 # ---------------------------------------------------------------------------
 # Header
 # ---------------------------------------------------------------------------
-st.title("📥 Data Input")
+st.title("Data Input")
 st.caption("Feed spend data into the CostSense pipeline — synthetic or your own.")
 
 # Check API connectivity
 health = get_health()
 if health is None:
-    st.error("⚠️ Cannot reach API server. Make sure `python run.py` is running on port 8000.")
+    st.error("Cannot reach API server. Make sure `python run.py` is running on port 8000.")
     st.stop()
 else:
-    st.success(f"✅ API connected — v{health.get('version', '?')} | {health.get('events_processed', 0)} events processed")
+    st.success(f"API connected — v{health.get('version', '?')} | {health.get('events_processed', 0)} events processed")
 
 st.divider()
 
@@ -44,14 +44,14 @@ st.divider()
 # ---------------------------------------------------------------------------
 mode = st.radio(
     "Input Mode",
-    ["🎲 Synthetic Data", "📂 Custom Data"],
+    ["Synthetic Data", "Custom Data"],
     horizontal=True,
 )
 
 # ---------------------------------------------------------------------------
 # MODE A — Synthetic Data
 # ---------------------------------------------------------------------------
-if mode == "🎲 Synthetic Data":
+if mode == "Synthetic Data":
     st.subheader("Generate Synthetic Spend Records")
     st.caption("Uses numpy to generate realistic enterprise spend data with injected anomalies.")
 
@@ -66,7 +66,7 @@ if mode == "🎲 Synthetic Data":
     col_preview, col_download, col_run = st.columns([2, 1, 1])
 
     with col_preview:
-        if st.button("👁️ Generate & Preview", use_container_width=True):
+        if st.button("Generate & Preview", use_container_width=True):
             with st.spinner("Generating records..."):
                 result = get_synthetic_data(n=n_records, seed=seed, include_anomalies=include_anomalies)
             if result and "records" in result:
@@ -90,7 +90,7 @@ if mode == "🎲 Synthetic Data":
 
         # Anomaly summary
         if include_anomalies:
-            with st.expander("🎯 Injected Anomaly Details"):
+            with st.expander("Injected Anomaly Details"):
                 anomaly_info = [
                     {"Type": "duplicate_payment", "Vendor": "AWS India", "Amount (₹)": "8,25,000", "Detection": "Rule: same invoice_id"},
                     {"Type": "duplicate_payment", "Vendor": "AWS India", "Amount (₹)": "8,25,000", "Detection": "Rule: same invoice_id"},
@@ -107,7 +107,7 @@ if mode == "🎲 Synthetic Data":
             csv_buf = io.StringIO()
             df[display_cols].to_csv(csv_buf, index=False)
             st.download_button(
-                label="⬇️ Download as CSV",
+                label="Download as CSV",
                 data=csv_buf.getvalue(),
                 file_name=f"costsense_synthetic_n{len(records)}_seed{seed}.csv",
                 mime="text/csv",
@@ -115,7 +115,7 @@ if mode == "🎲 Synthetic Data":
             )
 
         with col_go:
-            if st.button("🚀 Run Pipeline", type="primary", use_container_width=True):
+            if st.button("Run Pipeline", type="primary", use_container_width=True):
                 with st.spinner("Submitting to pipeline..."):
                     params = st.session_state.get("synthetic_params", {})
                     result = ingest_demo(
@@ -124,7 +124,7 @@ if mode == "🎲 Synthetic Data":
                         include_anomalies=params.get("include_anomalies", True),
                     )
                 if result and "process_id" in result:
-                    st.success(f"✅ Pipeline started! Process ID: `{result['process_id']}`")
+                    st.success(f"Pipeline started! Process ID: `{result['process_id']}`")
                     st.info("Switch to **Pipeline** page to watch agents process the data in real time.")
                     st.session_state["last_process_id"] = result["process_id"]
                 else:
@@ -136,7 +136,7 @@ if mode == "🎲 Synthetic Data":
 else:
     st.subheader("Custom Spend Data")
 
-    sub_mode = st.radio("Entry method", ["📁 Upload CSV", "✏️ Enter Manually"], horizontal=True)
+    sub_mode = st.radio("Entry method", ["Upload CSV", "Enter Manually"], horizontal=True)
 
     REQUIRED_COLUMNS = ["vendor", "amount", "category", "department", "transaction_date"]
     OPTIONAL_COLUMNS = ["currency", "invoice_number", "description", "source"]
@@ -154,7 +154,7 @@ else:
 
     records_to_submit: Optional[list[dict]] = None
 
-    if sub_mode == "📁 Upload CSV":
+    if sub_mode == "Upload CSV":
         st.caption("CSV must have these columns: " + ", ".join(REQUIRED_COLUMNS))
 
         uploaded_file = st.file_uploader("Choose a CSV file", type=["csv"])

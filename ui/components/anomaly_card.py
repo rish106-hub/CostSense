@@ -5,21 +5,21 @@ from __future__ import annotations
 import streamlit as st
 
 STATUS_BADGES = {
-    "detected": ("🔍", "#6b7280"),
-    "pending_approval": ("⏳", "#f59e0b"),
-    "approved": ("✅", "#22c55e"),
-    "auto_executed": ("⚡", "#3b82f6"),
-    "rejected": ("❌", "#ef4444"),
-    "queued_for_execution": ("📋", "#8b5cf6"),
+    "detected": ("[DETECTED]", "#6b7280"),
+    "pending_approval": ("[PENDING]", "#f59e0b"),
+    "approved": ("[APPROVED]", "#22c55e"),
+    "auto_executed": ("[EXECUTED]", "#3b82f6"),
+    "rejected": ("[REJECTED]", "#ef4444"),
+    "queued_for_execution": ("[QUEUED]", "#8b5cf6"),
 }
 
 TYPE_ICONS = {
-    "duplicate_payment": "💸",
-    "cloud_waste": "☁️",
-    "unused_saas": "🪑",
-    "vendor_rate_anomaly": "📈",
-    "sla_penalty_risk": "⚠️",
-    "unknown": "❓",
+    "duplicate_payment": "[PAYMENT]",
+    "cloud_waste": "[CLOUD]",
+    "unused_saas": "[SAAS]",
+    "vendor_rate_anomaly": "[RATE]",
+    "sla_penalty_risk": "[SLA]",
+    "unknown": "[UNKNOWN]",
 }
 
 
@@ -98,7 +98,7 @@ def render_anomaly_card(anomaly: dict, show_approve_button: bool = False) -> boo
                 "Approved by", value="CFO", key=f"approved_by_{anomaly_id}"
             )
             notes = st.text_area("Notes (optional)", key=f"notes_{anomaly_id}", height=60)
-            if st.button(f"✅ Approve Action", key=f"approve_{anomaly_id}", type="primary"):
+            if st.button(f"Approve Action", key=f"approve_{anomaly_id}", type="primary"):
                 approved = True
 
         st.caption(f"ID: `{anomaly_id}` | Detected: {anomaly.get('detected_at', 'N/A')}")

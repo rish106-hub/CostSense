@@ -13,9 +13,9 @@ import streamlit as st
 
 from ui.components.api_client import get_health, get_process_logs, get_process_trace, list_processes
 
-st.set_page_config(page_title="Process Logs — CostSense AI", page_icon="🔍", layout="wide")
+st.set_page_config(page_title="Process Logs — CostSense AI", page_icon="�", layout="wide")
 
-st.title("🔍 Process Trace Viewer")
+st.title("Process Trace Viewer")
 st.caption("Full input/output trace for every agent, per pipeline run.")
 
 # ---------------------------------------------------------------------------
@@ -23,25 +23,39 @@ st.caption("Full input/output trace for every agent, per pipeline run.")
 # ---------------------------------------------------------------------------
 health = get_health()
 if health is None:
-    st.error("⚠️ Cannot reach API server.")
+    st.error("Cannot reach API server.")
     st.stop()
 
 # ---------------------------------------------------------------------------
 # Process selector
 # ---------------------------------------------------------------------------
 processes_resp = list_processes(limit=50)
+if processes_resp is None:
+    st.error("Failed to load process list from API. Make sure the API is running.")
+    st.stop()
+
+if isinstance(processes_resp, dict) and "error" in processes_resp:
+    st.error(f"API Error: {processes_resp.get('error')}")
+    st.stop()
+
 processes = processes_resp.get("processes", []) if processes_resp else []
 
-if not processes:
+if not processes or len(processes) == 0:
     st.info("No pipeline runs found yet. Go to **Data Input** and run a pipeline first.")
     st.stop()
 
 process_options = {}
 for p in processes:
-    pid = p["process_id"]
-    ts = (p.get("started_at") or "")[:19].replace("T", " ")
-    label = f"{ts} — {pid[:12]}… ({p.get('record_count', '?')} steps)"
-    process_options[label] = pid
+    pid = p.get("process_id")
+    ts = (p.get("started_at") or "Unknown")[:19].replace("T", " ")
+    record_count = p.get("agent_count", p.get("record_count", "?"))
+    label = f"{ts} — {pid[:12] if pid else 'unknown'}… ({record_count} steps)"
+    if pid:
+        process_options[label] = pid
+
+if not process_options:
+    st.error("Could not parse process runs. Check API response.")
+    st.stop()
 
 selected_label = st.selectbox("Select a process run", list(process_options.keys()))
 selected_pid = process_options[selected_label]
@@ -74,6 +88,14 @@ with st.sidebar:
 # Load trace
 # ---------------------------------------------------------------------------
 trace_resp = get_process_trace(selected_pid)
+if trace_resp is None:
+    st.error(f"Failed to load process trace for {selected_pid}. API unreachable.")
+    st.stop()
+
+if isinstance(trace_resp, dict) and "error" in trace_resp:
+    st.error(f"API Error: {trace_resp.get('error')}")
+    st.stop()
+
 logs = trace_resp.get("logs", []) if trace_resp else []
 
 # Apply filters
@@ -83,8 +105,10 @@ if agent_filter:
     logs = [l for l in logs if l.get("agent_name") in agent_filter]
 
 if not logs:
-    st.warning("No log entries found for this process run with current filters.")
-    st.stop()
+    st.warning(f"No log entries found for process {selected_pid[:8]}… with current filters. Try adjusting filters.")
+    # Still show KPIs even if filtered
+    if trace_resp.get("logs"):
+        st.info("Clear the filters above to see all logs for this process.")
 
 # ---------------------------------------------------------------------------
 # Summary KPIs
@@ -102,110 +126,114 @@ k4.metric("Total Duration", f"{total_ms:,}ms")
 
 st.divider()
 
-# ---------------------------------------------------------------------------
-# Gantt / Waterfall Chart
-# ---------------------------------------------------------------------------
-st.subheader("⏱️ Agent Execution Waterfall")
+# Show remaining content only if we have logs
+if logs:
+    # ---------------------------------------------------------------------------
+    # Gantt / Waterfall Chart
+    # ---------------------------------------------------------------------------
+    st.subheader("Agent Execution Waterfall")
 
-gantt_data = []
-for log in logs:
-    if log.get("started_at"):
-        gantt_data.append(
+    gantt_data = []
+    for log in logs:
+        if log.get("started_at"):
+            gantt_data.append(
+                {
+                    "Agent": log["agent_name"].replace("agent_0", "A").replace("agent_", "A"),
+                    "Start": log["started_at"],
+                    "Finish": log.get("completed_at") or log["started_at"],
+                    "Status": log.get("status", "success"),
+                    "Duration (ms)": log.get("duration_ms") or 0,
+                }
+            )
+
+    if gantt_data:
+        df_gantt = pd.DataFrame(gantt_data)
+        color_map = {"success": "#22c55e", "error": "#ef4444", "skipped": "#6b7280"}
+        fig = px.timeline(
+            df_gantt,
+            x_start="Start",
+            x_end="Finish",
+            y="Agent",
+            color="Status",
+            color_discrete_map=color_map,
+            hover_data=["Duration (ms)"],
+        )
+        fig.update_layout(height=350, margin=dict(l=0, r=0, t=10, b=0))
+        fig.update_yaxes(autorange="reversed")
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("Timestamps not available for Gantt chart — showing table only.")
+
+    st.divider()
+
+    # ---------------------------------------------------------------------------
+    # Log table
+    # ---------------------------------------------------------------------------
+    st.subheader("Step-by-Step Log")
+
+    table_data = []
+    for i, log in enumerate(logs):
+        table_data.append(
             {
-                "Agent": log["agent_name"].replace("agent_0", "A").replace("agent_", "A"),
-                "Start": log["started_at"],
-                "Finish": log.get("completed_at") or log["started_at"],
-                "Status": log.get("status", "success"),
+                "#": i + 1,
+                "Agent": log.get("agent_name", ""),
+                "Topic In": log.get("topic_in") or "—",
+                "Topic Out": log.get("topic_out") or "—",
+                "Status": log.get("status", ""),
                 "Duration (ms)": log.get("duration_ms") or 0,
+                "Started": (log.get("started_at") or "")[:19].replace("T", " "),
+                "Error": (log.get("error_message") or "")[:80],
             }
         )
 
-if gantt_data:
-    df_gantt = pd.DataFrame(gantt_data)
-    color_map = {"success": "#22c55e", "error": "#ef4444", "skipped": "#6b7280"}
-    fig = px.timeline(
-        df_gantt,
-        x_start="Start",
-        x_end="Finish",
-        y="Agent",
-        color="Status",
-        color_discrete_map=color_map,
-        hover_data=["Duration (ms)"],
-    )
-    fig.update_layout(height=350, margin=dict(l=0, r=0, t=10, b=0))
-    fig.update_yaxes(autorange="reversed")
-    st.plotly_chart(fig, use_container_width=True)
-else:
-    st.info("Timestamps not available for Gantt chart — showing table only.")
-
-st.divider()
-
-# ---------------------------------------------------------------------------
-# Log table
-# ---------------------------------------------------------------------------
-st.subheader("📋 Step-by-Step Log")
-
-table_data = []
-for i, log in enumerate(logs):
-    table_data.append(
-        {
-            "#": i + 1,
-            "Agent": log.get("agent_name", ""),
-            "Topic In": log.get("topic_in") or "—",
-            "Topic Out": log.get("topic_out") or "—",
-            "Status": log.get("status", ""),
-            "Duration (ms)": log.get("duration_ms") or 0,
-            "Started": (log.get("started_at") or "")[:19].replace("T", " "),
-            "Error": (log.get("error_message") or "")[:80],
-        }
+    df_table = pd.DataFrame(table_data)
+    selected_rows = st.dataframe(
+        df_table,
+        use_container_width=True,
+        height=300,
+        on_select="rerun",
+        selection_mode="single-row",
     )
 
-df_table = pd.DataFrame(table_data)
-selected_rows = st.dataframe(
-    df_table,
-    use_container_width=True,
-    height=300,
-    on_select="rerun",
-    selection_mode="single-row",
-)
+    # ---------------------------------------------------------------------------
+    # Input / Output JSON Inspector
+    # ---------------------------------------------------------------------------
+    st.divider()
+    st.subheader("Payload Inspector")
 
-# ---------------------------------------------------------------------------
-# Input / Output JSON Inspector
-# ---------------------------------------------------------------------------
-st.divider()
-st.subheader("🔎 Payload Inspector")
+    selected_indices = (
+        selected_rows.selection.get("rows", []) if hasattr(selected_rows, "selection") else []
+    )
 
-selected_indices = (
-    selected_rows.selection.get("rows", []) if hasattr(selected_rows, "selection") else []
-)
+    if selected_indices:
+        row_idx = selected_indices[0]
+        log = logs[row_idx]
 
-if selected_indices:
-    row_idx = selected_indices[0]
-    log = logs[row_idx]
+        st.markdown(f"**Agent:** `{log.get('agent_name', '')}` | **Status:** `{log.get('status', '')}` | **Duration:** `{log.get('duration_ms') or 0}ms`")
+        if log.get("error_message"):
+            st.error(f"Error: {log['error_message']}")
 
-    st.markdown(f"**Agent:** `{log.get('agent_name', '')}` | **Status:** `{log.get('status', '')}` | **Duration:** `{log.get('duration_ms') or 0}ms`")
-    if log.get("error_message"):
-        st.error(f"Error: {log['error_message']}")
+        inp_col, out_col = st.columns(2)
 
-    inp_col, out_col = st.columns(2)
-
-    with inp_col:
-        st.markdown("**Input Payload**")
-        input_payload = log.get("input_payload") or {}
-        try:
-            st.json(input_payload)
-        except Exception:
-            st.code(str(input_payload), language="json")
-
-    with out_col:
-        st.markdown("**Output Payload**")
-        output_payload = log.get("output_payload")
-        if output_payload:
+        with inp_col:
+            st.markdown("**Input Payload**")
+            input_payload = log.get("input_payload") or {}
             try:
-                st.json(output_payload)
+                st.json(input_payload)
             except Exception:
-                st.code(str(output_payload), language="json")
-        else:
-            st.caption("No output payload (agent did not publish an event).")
+                st.code(str(input_payload), language="json")
+
+        with out_col:
+            st.markdown("**Output Payload**")
+            output_payload = log.get("output_payload")
+            if output_payload:
+                try:
+                    st.json(output_payload)
+                except Exception:
+                    st.code(str(output_payload), language="json")
+            else:
+                st.caption("No output payload (agent did not publish an event).")
+    else:
+        st.info("Click a row in the table above to inspect its input/output payloads.")
 else:
-    st.info("Click a row in the table above to inspect its input/output payloads.")
+    st.info("No log entries to display. Check your filters or try a different process run.")

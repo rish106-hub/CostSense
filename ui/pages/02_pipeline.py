@@ -19,9 +19,13 @@ from ui.components.api_client import (
     list_processes,
 )
 
-st.set_page_config(page_title="Pipeline — CostSense AI", page_icon="⚙️", layout="wide")
+st.set_page_config(page_title="Pipeline — CostSense AI", page_icon="🔄", layout="wide")
 
-st.title("⚙️ Live Pipeline")
+# Initialize session state for process selection
+if "pipeline_selected_process_id" not in st.session_state:
+    st.session_state.pipeline_selected_process_id = None
+
+st.title("Live Pipeline")
 st.caption("Watch agents process spend data in real time.")
 
 # ---------------------------------------------------------------------------
@@ -29,7 +33,7 @@ st.caption("Watch agents process spend data in real time.")
 # ---------------------------------------------------------------------------
 health = get_health()
 if health is None:
-    st.error("⚠️ Cannot reach API server.")
+    st.error("Cannot reach API server.")
     st.stop()
 
 # ---------------------------------------------------------------------------
@@ -37,7 +41,7 @@ if health is None:
 # ---------------------------------------------------------------------------
 with st.sidebar:
     st.header("Controls")
-    auto_refresh = st.checkbox("Auto-refresh (3s)", value=True)
+    auto_refresh = st.checkbox("Auto-refresh (3s)", value=False)
     refresh_interval = st.slider("Refresh interval (s)", 1, 10, 3)
 
     st.divider()
@@ -46,12 +50,31 @@ with st.sidebar:
     processes = processes_resp.get("processes", []) if processes_resp else []
 
     process_options = {"All processes": None}
+    first_process_id = None
     for p in processes:
         label = f"{p['process_id'][:8]}… ({p.get('record_count', '?')} records)"
         process_options[label] = p["process_id"]
+        if first_process_id is None:
+            first_process_id = p["process_id"]
 
-    selected_label = st.selectbox("Process run", list(process_options.keys()))
+    # Determine default: use stored selection, or fall back to most recent/current process
+    default_process_id = st.session_state.pipeline_selected_process_id
+    if default_process_id is None and first_process_id is not None:
+        default_process_id = first_process_id
+    
+    # Find index for default value
+    default_index = 0
+    if default_process_id is not None:
+        options_list = list(process_options.items())
+        for idx, (label, pid) in enumerate(options_list):
+            if pid == default_process_id:
+                default_index = idx
+                break
+    
+    selected_label = st.selectbox("Process run", list(process_options.keys()), index=default_index)
     selected_process_id = process_options[selected_label]
+    # Store selection in session state
+    st.session_state.pipeline_selected_process_id = selected_process_id
 
 # ---------------------------------------------------------------------------
 # Load data
@@ -61,6 +84,14 @@ process_logs = logs_resp.get("logs", []) if logs_resp else []
 
 events_resp = get_bus_events(limit=100)
 bus_events = events_resp.get("events", []) if events_resp else []
+
+# Debug: Show what agents we have logs for
+st.sidebar.caption("DEBUG: Agent logs in response")
+agent_names_in_logs = set()
+for log in process_logs:
+    agent_names_in_logs.add(log.get("agent_name", "unknown"))
+st.sidebar.write(f"Agents with logs: {sorted(agent_names_in_logs)}")
+st.sidebar.write(f"Total logs returned: {len(process_logs)}")
 
 # Compute event counts per topic
 event_counts: dict[str, int] = defaultdict(int)
@@ -101,7 +132,7 @@ st.divider()
 # ---------------------------------------------------------------------------
 # Pipeline Topology (static Mermaid-style using markdown + badges)
 # ---------------------------------------------------------------------------
-with st.expander("📊 Pipeline Topology", expanded=False):
+with st.expander("Pipeline Topology", expanded=False):
     topics = [
         ("raw.spend", "Agent 01 → raw.spend"),
         ("normalized.spend", "Agent 02 → normalized.spend"),
@@ -133,7 +164,7 @@ st.divider()
 # ---------------------------------------------------------------------------
 # Event Feed
 # ---------------------------------------------------------------------------
-st.subheader("📡 Recent Event Bus Activity")
+st.subheader("Recent Event Bus Activity")
 
 if bus_events:
     feed_data = []

@@ -54,17 +54,33 @@ def _orm_to_schema(row) -> AnomalyOut:
         approval_notes=row.approval_notes,
         detected_at=row.detected_at,
         updated_at=row.updated_at,
+        # Flattened spend record fields (optional, denormalized from event payload)
+        vendor=None,
+        amount=None,
+        currency=None,
+        department=None,
+        category=None,
+        transaction_date=None,
     )
 
 
 @router.get("", response_model=AnomalyListResponse)
 async def list_anomalies(
     status: Optional[str] = Query(default=None, description="Filter by status"),
+    process_id: Optional[str] = Query(default=None, description="Filter by process run"),
     limit: int = Query(default=200, ge=1, le=1000),
     session: AsyncSession = Depends(get_session),
 ):
-    """Return all anomalies sorted by APS descending."""
-    rows = await get_anomalies(session, status=status, limit=limit)
+    """Return all anomalies sorted by APS descending, optionally filtered by status or process."""
+    import structlog
+    logger = structlog.get_logger(__name__)
+    
+    logger.info("list_anomalies.request", status=status, process_id=process_id, limit=limit)
+    
+    rows = await get_anomalies(session, status=status, process_id=process_id, limit=limit)
+    
+    logger.info("list_anomalies.fetched", count=len(rows), process_id=process_id)
+    
     anomalies = [_orm_to_schema(r) for r in rows]
 
     # Compute exposure and recovery totals

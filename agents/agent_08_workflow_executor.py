@@ -79,10 +79,18 @@ class WorkflowExecutorAgent:
             # Update anomaly status in DB
             factory = get_session_factory()
             async with factory() as session:
-                await upsert_anomaly(session, {
-                    "anomaly_id": anomaly_id,
-                    "status": "auto_executed",
-                })
+                try:
+                    await upsert_anomaly(session, {
+                        "anomaly_id": anomaly_id,
+                        "status": "auto_executed",
+                    })
+                except Exception as db_exc:
+                    logger.error(
+                        "agent08.upsert_failed",
+                        anomaly_id=anomaly_id,
+                        error=str(db_exc),
+                    )
+                    raise
 
             logger.info(
                 "agent08.auto_executed",
@@ -112,11 +120,19 @@ class WorkflowExecutorAgent:
             anomaly_id = anomaly.get("anomaly_id")
             factory = get_session_factory()
             async with factory() as session:
-                await upsert_anomaly(session, {
-                    "anomaly_id": anomaly_id,
-                    "status": "pending_approval",
-                    "approval_needed": True,
-                })
+                try:
+                    await upsert_anomaly(session, {
+                        "anomaly_id": anomaly_id,
+                        "status": "pending_approval",
+                        "approval_needed": True,
+                    })
+                except Exception as db_exc:
+                    logger.error(
+                        "agent08.upsert_approval_failed",
+                        anomaly_id=anomaly_id,
+                        error=str(db_exc),
+                    )
+                    raise
 
             logger.info(
                 "agent08.pending_approval_registered",
@@ -133,7 +149,11 @@ class WorkflowExecutorAgent:
             )
 
         except Exception as exc:
-            logger.error("agent08.approval_register_error", error=str(exc))
+            logger.error(
+                "agent08.approval_register_error",
+                anomaly_id=event.payload.get("anomaly_id"),
+                error=str(exc),
+            )
             await self._log(event, "error", str(exc), started_at)
 
     async def execute_approved(
@@ -147,29 +167,40 @@ class WorkflowExecutorAgent:
         Executes the action for a human-approved anomaly.
         """
         factory = get_session_factory()
-        async with factory() as session:
-            from core.db import approve_anomaly, get_anomaly_by_id
-            anomaly_row = await approve_anomaly(session, anomaly_id, approved_by, notes)
-            if not anomaly_row:
-                raise ValueError(f"Anomaly {anomaly_id} not found")
+        try:
+            async with factory() as session:
+                from core.db import approve_anomaly
+                anomaly_row = await approve_anomaly(session, anomaly_id, approved_by, notes)
+                if not anomaly_row:
+                    raise ValueError(f"Anomaly {anomaly_id} not found")
 
-            anomaly_type = anomaly_row.anomaly_type or "unknown"
+                anomaly_type = anomaly_row.anomaly_type or "unknown"
+                amount = float(anomaly_row.amount or 0)
 
-            # Simulate execution
-            action_result = self._simulate_action(anomaly_type, 0)
+                # Simulate execution
+                action_result = self._simulate_action(anomaly_type, amount)
 
-            # Update to executed status
-            await upsert_anomaly(session, {
-                "anomaly_id": anomaly_id,
-                "status": "approved",
-            })
+                # Update to executed status after approval and action execution
+                await upsert_anomaly(session, {
+                    "anomaly_id": anomaly_id,
+                    "status": "auto_executed",
+                })
 
-        logger.info(
-            "agent08.approved_executed",
-            anomaly_id=anomaly_id,
-            approved_by=approved_by,
-        )
-        return action_result
+            logger.info(
+                "agent08.approved_executed",
+                anomaly_id=anomaly_id,
+                approved_by=approved_by,
+                recovered_inr=action_result.get("recovered_inr", 0),
+            )
+            return action_result
+        except Exception as exc:
+            logger.error(
+                "agent08.execute_approved_error",
+                anomaly_id=anomaly_id,
+                approved_by=approved_by,
+                error=str(exc),
+            )
+            raise
 
     @staticmethod
     def _simulate_action(anomaly_type: str, amount: float) -> dict:
@@ -197,21 +228,29 @@ class WorkflowExecutorAgent:
             duration_ms = int((completed_at - started_at).total_seconds() * 1000)
             factory = get_session_factory()
             async with factory() as session:
-                await insert_process_log(session, {
-                    "process_id": event.process_id,
-                    "agent_name": AGENT_NAME,
-                    "event_id": event.event_id,
-                    "topic_in": event.topic,
-                    "topic_out": None,
-                    "record_id": event.payload.get("record_id"),
-                    "anomaly_id": event.payload.get("anomaly_id"),
-                    "input_payload": event.payload,
-                    "output_payload": output_payload,
-                    "status": status,
-                    "error_message": error_message,
-                    "started_at": started_at,
-                    "completed_at": completed_at,
-                    "duration_ms": duration_ms,
-                })
+                try:
+                    await insert_process_log(session, {
+                        "process_id": event.process_id,
+                        "agent_name": AGENT_NAME,
+                        "event_id": event.event_id,
+                        "topic_in": event.topic,
+                        "topic_out": None,
+                        "record_id": event.payload.get("record_id"),
+                        "anomaly_id": event.payload.get("anomaly_id"),
+                        "input_payload": event.payload,
+                        "output_payload": output_payload,
+                        "status": status,
+                        "error_message": error_message,
+                        "started_at": started_at,
+                        "completed_at": completed_at,
+                        "duration_ms": duration_ms,
+                    })
+                except Exception as db_exc:
+                    logger.error(
+                        "agent08.log_insert_failed",
+                        anomaly_id=event.payload.get("anomaly_id"),
+                        error=str(db_exc),
+                    )
+                    raise
         except Exception as log_exc:
             logger.warning("agent08.log_failed", error=str(log_exc))

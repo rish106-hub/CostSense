@@ -144,10 +144,15 @@ class CFOSummaryOut(BaseModel):
     pending_approval: int
     total_exposure_inr: float
     total_recovered_inr: float
+    pending_exposure_inr: float = 0.0
     recovery_rate_pct: float
     top_anomaly: Optional[AnomalyOut]
     events_by_topic: dict[str, int]
     agents_active: int
+    anomaly_breakdown: dict[str, int] = {}
+    status_distribution: dict[str, int] = {}
+    agent_stats: list[dict] = []
+    source_stats: dict[str, int] = {}
 
 
 # ---------------------------------------------------------------------------

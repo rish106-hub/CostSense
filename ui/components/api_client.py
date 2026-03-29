@@ -72,10 +72,12 @@ def ingest_batch(records: list[dict]) -> Optional[dict]:
 # Anomalies
 # ---------------------------------------------------------------------------
 
-def get_anomalies(status: Optional[str] = None, limit: int = 200) -> Optional[dict]:
+def get_anomalies(status: Optional[str] = None, process_id: Optional[str] = None, limit: int = 200) -> Optional[dict]:
     params = {"limit": limit}
     if status:
         params["status"] = status
+    if process_id:
+        params["process_id"] = process_id
     return _get("/anomalies", params=params)
 
 
@@ -138,5 +140,8 @@ def list_processes(limit: int = 50) -> Optional[dict]:
 # Summary
 # ---------------------------------------------------------------------------
 
-def get_summary() -> Optional[dict]:
-    return _get("/summary")
+def get_summary(process_id: Optional[str] = None) -> Optional[dict]:
+    params = {}
+    if process_id:
+        params["process_id"] = process_id
+    return _get("/summary", params=params)

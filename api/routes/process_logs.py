@@ -87,9 +87,17 @@ async def get_logs(
     session: AsyncSession = Depends(get_session),
 ):
     """Return process logs with optional filters."""
+    import structlog
+    logger = structlog.get_logger(__name__)
+    
+    logger.info("get_logs.request", process_id=process_id, agent_name=agent_name, limit=limit)
+    
     rows = await get_process_logs(
         session, process_id=process_id, agent_name=agent_name, limit=limit
     )
+    
+    logger.info("get_logs.result", count=len(rows), process_id=process_id)
+    
     return ProcessLogResponse(
         count=len(rows),
         logs=[_orm_to_log_entry(r) for r in rows],

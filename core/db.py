@@ -145,11 +145,14 @@ async def upsert_anomaly(session: AsyncSession, data: dict) -> Anomaly:
 async def get_anomalies(
     session: AsyncSession,
     status: Optional[str] = None,
+    process_id: Optional[str] = None,
     limit: int = 200,
 ) -> list[Anomaly]:
     query = select(Anomaly)
     if status:
         query = query.where(Anomaly.status == status)
+    if process_id:
+        query = query.where(Anomaly.process_id == process_id)
     query = query.order_by(Anomaly.aps_score.desc().nullslast()).limit(limit)
     result = await session.execute(query)
     return list(result.scalars().all())
