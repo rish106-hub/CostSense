@@ -1,13 +1,12 @@
 """
 LangChain LLM client for Agent 4 (Root Cause Analysis).
 
-Uses OpenRouter as the API gateway with three free-tier models in a fallback chain:
-  Primary:    meta-llama/llama-3.1-8b-instruct:free
-  Fallback 1: mistralai/mistral-7b-instruct:free
-  Fallback 2: google/gemma-2-9b-it:free
+Uses Google Gemini 2.5 Flash as the primary model with fallback to Gemini 1.5 Flash:
+  Primary:    gemini-2.5-flash
+  Fallback:   gemini-1.5-flash
 
 The chain structure:
-  ChatPromptTemplate → RunnableWithFallbacks (3 models) → PydanticOutputParser
+  ChatPromptTemplate → RunnableWithFallbacks (2 models) → PydanticOutputParser
 
 On total failure, returns a safe default RootCauseResult so the pipeline continues.
 """
@@ -21,7 +20,7 @@ import structlog
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableSequence
-from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, Field
 from tenacity import retry, stop_after_attempt, wait_exponential
 
@@ -81,14 +80,13 @@ Analyze this anomaly and respond with JSON only."""
 # ---------------------------------------------------------------------------
 
 
-def _build_llm(model_id: str, api_key: str, base_url: str, timeout: int) -> ChatOpenAI:
-    """Create a single ChatOpenAI instance pointing to OpenRouter."""
-    return ChatOpenAI(
+def _build_llm(model_id: str, api_key: str, timeout: int) -> ChatGoogleGenerativeAI:
+    """Create a single ChatGoogleGenerativeAI instance pointing to Gemini."""
+    return ChatGoogleGenerativeAI(
         model=model_id,
-        api_key=api_key,
-        base_url=base_url,
+        google_api_key=api_key,
         temperature=float(os.getenv("LLM_TEMPERATURE", "0.1")),
-        max_tokens=int(os.getenv("LLM_MAX_TOKENS", "256")),
+        max_output_tokens=int(os.getenv("LLM_MAX_TOKENS", "256")),
         timeout=timeout,
         max_retries=0,  # Retries handled by tenacity at the agent level
     )
@@ -101,21 +99,18 @@ def build_root_cause_chain() -> RunnableSequence:
     Returns a runnable that accepts a dict with anomaly context fields and
     produces a RootCauseResult.
     """
-    api_key = os.getenv("OPENROUTER_API_KEY", "dummy-key")
-    base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+    api_key = os.getenv("GOOGLE_API_KEY", "dummy-key")
     timeout = int(os.getenv("LLM_TIMEOUT_SECONDS", "30"))
 
-    model_primary = os.getenv("LLM_MODEL_PRIMARY", "meta-llama/llama-3.1-8b-instruct:free")
-    model_fallback_1 = os.getenv("LLM_MODEL_FALLBACK_1", "mistralai/mistral-7b-instruct:free")
-    model_fallback_2 = os.getenv("LLM_MODEL_FALLBACK_2", "google/gemma-2-9b-it:free")
+    model_primary = os.getenv("LLM_MODEL_PRIMARY", "gemini-2.5-flash")
+    model_fallback = os.getenv("LLM_MODEL_FALLBACK", "gemini-1.5-flash")
 
-    primary = _build_llm(model_primary, api_key, base_url, timeout)
-    fallback1 = _build_llm(model_fallback_1, api_key, base_url, timeout)
-    fallback2 = _build_llm(model_fallback_2, api_key, base_url, timeout)
+    primary = _build_llm(model_primary, api_key, timeout)
+    fallback = _build_llm(model_fallback, api_key, timeout)
 
     # LangChain native fallback — auto-retries on rate limit or API errors
     llm_with_fallbacks = primary.with_fallbacks(
-        [fallback1, fallback2],
+        [fallback],
         exceptions_to_handle=(Exception,),
     )
 
@@ -134,8 +129,7 @@ def build_root_cause_chain() -> RunnableSequence:
     logger.info(
         "llm.chain_built",
         primary=model_primary,
-        fallback1=model_fallback_1,
-        fallback2=model_fallback_2,
+        fallback=model_fallback,
     )
     return chain
 
