@@ -146,6 +146,7 @@ async def get_anomalies(
     session: AsyncSession,
     status: Optional[str] = None,
     process_id: Optional[str] = None,
+    assigned_to: Optional[str] = None,
     limit: int = 200,
 ) -> list[Anomaly]:
     query = select(Anomaly)
@@ -153,6 +154,8 @@ async def get_anomalies(
         query = query.where(Anomaly.status == status)
     if process_id:
         query = query.where(Anomaly.process_id == process_id)
+    if assigned_to:
+        query = query.where(Anomaly.assigned_to == assigned_to)
     query = query.order_by(Anomaly.aps_score.desc().nullslast()).limit(limit)
     result = await session.execute(query)
     return list(result.scalars().all())
@@ -186,6 +189,107 @@ async def approve_anomaly(
     )
     await session.commit()
     return await get_anomaly_by_id(session, anomaly_id)
+
+
+async def reject_anomaly(
+    session: AsyncSession,
+    anomaly_id: str,
+    rejected_by: str,
+    reason: Optional[str] = None,
+) -> Optional[Anomaly]:
+    """Mark anomaly as rejected."""
+    now = datetime.now(timezone.utc)
+    await session.execute(
+        update(Anomaly)
+        .where(Anomaly.anomaly_id == anomaly_id)
+        .values(
+            status="rejected",
+            rejected_by=rejected_by,
+            rejection_reason=reason,
+            rejected_at=now,
+            updated_at=now,
+        )
+    )
+    await session.commit()
+    return await get_anomaly_by_id(session, anomaly_id)
+
+
+async def assign_anomaly(
+    session: AsyncSession,
+    anomaly_id: str,
+    assigned_to: str,
+) -> Optional[Anomaly]:
+    """Assign an anomaly to a specific reviewer."""
+    now = datetime.now(timezone.utc)
+    await session.execute(
+        update(Anomaly)
+        .where(Anomaly.anomaly_id == anomaly_id)
+        .values(assigned_to=assigned_to, updated_at=now)
+    )
+    await session.commit()
+    return await get_anomaly_by_id(session, anomaly_id)
+
+
+async def bulk_approve_anomalies(
+    session: AsyncSession,
+    anomaly_ids: list[str],
+    approved_by: str,
+    notes: Optional[str] = None,
+) -> tuple[int, int]:
+    """Approve multiple anomalies at once. Returns (approved_count, skipped_count)."""
+    now = datetime.now(timezone.utc)
+    approved = 0
+    skipped = 0
+    for aid in anomaly_ids:
+        row = await get_anomaly_by_id(session, aid)
+        if row and row.status == "pending_approval":
+            await session.execute(
+                update(Anomaly)
+                .where(Anomaly.anomaly_id == aid)
+                .values(
+                    status="approved",
+                    approved_by=approved_by,
+                    approved_at=now,
+                    approval_notes=notes,
+                    updated_at=now,
+                )
+            )
+            approved += 1
+        else:
+            skipped += 1
+    await session.commit()
+    return approved, skipped
+
+
+async def bulk_reject_anomalies(
+    session: AsyncSession,
+    anomaly_ids: list[str],
+    rejected_by: str,
+    reason: Optional[str] = None,
+) -> tuple[int, int]:
+    """Reject multiple anomalies at once. Returns (rejected_count, skipped_count)."""
+    now = datetime.now(timezone.utc)
+    rejected = 0
+    skipped = 0
+    for aid in anomaly_ids:
+        row = await get_anomaly_by_id(session, aid)
+        if row and row.status == "pending_approval":
+            await session.execute(
+                update(Anomaly)
+                .where(Anomaly.anomaly_id == aid)
+                .values(
+                    status="rejected",
+                    rejected_by=rejected_by,
+                    rejection_reason=reason,
+                    rejected_at=now,
+                    updated_at=now,
+                )
+            )
+            rejected += 1
+        else:
+            skipped += 1
+    await session.commit()
+    return rejected, skipped
 
 
 async def get_anomaly_totals(session: AsyncSession) -> dict:

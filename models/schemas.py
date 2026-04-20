@@ -68,6 +68,11 @@ class AnomalyOut(BaseModel):
     approved_by: Optional[str]
     approved_at: Optional[datetime]
     approval_notes: Optional[str]
+    # Human-in-the-loop fields
+    assigned_to: Optional[str] = None
+    rejected_by: Optional[str] = None
+    rejection_reason: Optional[str] = None
+    rejected_at: Optional[datetime] = None
     detected_at: datetime
     updated_at: datetime
 
@@ -100,6 +105,49 @@ class ApproveAnomalyIn(BaseModel):
 class ApproveAnomalyOut(BaseModel):
     message: str
     anomaly: AnomalyOut
+
+
+class RejectAnomalyIn(BaseModel):
+    rejected_by: str
+    reason: Optional[str] = None
+
+
+class RejectAnomalyOut(BaseModel):
+    message: str
+    anomaly: AnomalyOut
+
+
+class AssignAnomalyIn(BaseModel):
+    assigned_to: str
+
+
+class AssignAnomalyOut(BaseModel):
+    message: str
+    anomaly: AnomalyOut
+
+
+class BulkApproveIn(BaseModel):
+    anomaly_ids: list[str]
+    approved_by: str
+    notes: Optional[str] = None
+
+
+class BulkApproveOut(BaseModel):
+    approved: int
+    skipped: int
+    message: str
+
+
+class BulkRejectIn(BaseModel):
+    anomaly_ids: list[str]
+    rejected_by: str
+    reason: Optional[str] = None
+
+
+class BulkRejectOut(BaseModel):
+    rejected: int
+    skipped: int
+    message: str
 
 
 # ---------------------------------------------------------------------------

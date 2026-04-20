@@ -92,7 +92,8 @@ Route to approval gate when:  APS ≥ 4.0  AND  complexity ≥ 2
 | Anomaly Detection | PyOD IsolationForest + 5-rule engine |
 | Database | PostgreSQL (SQLAlchemy async) |
 | Vector Search | pgvector — cosine similarity for similar-anomaly retrieval |
-| UI | Streamlit + Plotly |
+| UI (React) | React 19 + Vite 8 + TypeScript + TailwindCSS — [costsense-ui](https://github.com/rish106-hub/costsense-ui) |
+| UI (Streamlit) | Streamlit + Plotly (legacy) |
 | Config | Pydantic Settings + python-dotenv |
 
 ---
@@ -278,9 +279,13 @@ Two input modes:
 | `POST` | `/ingest/demo` | Run full pipeline on built-in synthetic data |
 | `POST` | `/ingest/record` | Ingest a single spend record |
 | `POST` | `/ingest/batch` | Ingest a batch of spend records |
-| `GET` | `/anomalies` | List anomalies (filter by status, process_id) |
-| `GET` | `/anomalies/pending-approval` | Anomalies awaiting CFO sign-off |
+| `GET` | `/anomalies` | List anomalies (filter by status, process_id, assigned_to) |
+| `GET` | `/anomalies/pending-approval` | Anomalies awaiting CFO sign-off (filter by assigned_to) |
 | `POST` | `/anomalies/{id}/approve` | Approve and trigger execution |
+| `POST` | `/anomalies/{id}/reject` | Reject with reviewer name and optional reason |
+| `PATCH` | `/anomalies/{id}/assign` | Assign anomaly to a named reviewer |
+| `POST` | `/anomalies/bulk-approve` | Approve a batch of anomalies in one call |
+| `POST` | `/anomalies/bulk-reject` | Reject a batch of anomalies in one call |
 | `GET` | `/logs` | All process log entries |
 | `GET` | `/logs/processes` | List distinct process runs |
 | `GET` | `/logs/{process_id}` | Full trace for a specific process |

@@ -1,249 +1,255 @@
 """
-Page 5 — CFO Summary
-
-High-level executive view: recovery metrics, top anomaly, agent health,
-and spend data source breakdown.
+Page 5 — Executive Summary
+CFO-level financial impact view with recovery metrics and agent health.
 """
 
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from ui.components.anomaly_card import render_anomaly_card
+st.set_page_config(page_title="Executive Summary — CostSense AI", page_icon="⚡", layout="wide")
+
+from ui.components.theme import inject_global_css, page_header, kpi_card, badge
 from ui.components.api_client import get_anomalies, get_health, get_summary, list_processes
 
-# Disable caching to force fresh API calls
-st.set_page_config(page_title="CFO Summary — CostSense AI", page_icon="", layout="wide")
+inject_global_css()
 
-# Initialize session state for process selection
-if "selected_process_id" not in st.session_state:
-    st.session_state.selected_process_id = None
-if "last_process_id" not in st.session_state:
-    st.session_state.last_process_id = None
+# ── Sidebar ────────────────────────────────────────────────────
+with st.sidebar:
+    st.markdown("""
+    <div style="padding: 12px 4px 20px;">
+        <div style="font-size:1.1rem; font-weight:800; color:#e8f0fe;">⚡ CostSense AI</div>
+        <div style="font-size:10px; color:#4a6080; text-transform:uppercase; letter-spacing:0.1em; margin-top:2px;">Executive Summary</div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.divider()
 
-st.title("Summary")
-st.caption("Executive overview of cost intelligence findings and recovery impact.")
-
-# ---------------------------------------------------------------------------
-# Health check
-# ---------------------------------------------------------------------------
+# ── Health ─────────────────────────────────────────────────────
 health = get_health()
 if health is None:
-    st.error("Cannot reach API server.")
+    st.markdown('<div class="banner-error">Cannot reach API server.</div>', unsafe_allow_html=True)
     st.stop()
 
-# ---------------------------------------------------------------------------
-# Process selector
-# ---------------------------------------------------------------------------
-st.subheader("Select Process Run")
-col1, col2 = st.columns([3, 1])
+page_header("Executive Summary", "Financial impact overview for operations leadership.")
 
-with col1:
-    processes_resp = list_processes(limit=50)
-    processes = processes_resp.get("processes", []) if processes_resp else []
-    
-    # Build dropdown options
-    process_options = {"All Processes": None}
-    first_process_id = None
-    for p in processes:
-        pid = p.get("process_id")
-        ts = (p.get("started_at") or "Unknown")[:19].replace("T", " ")
-        label = f"{ts} — {pid[:12] if pid else 'unknown'}…"
-        if pid:
-            process_options[label] = pid
-            if first_process_id is None:
-                first_process_id = pid
-    
-    # Determine default: use stored selection, or fall back to most recent/current process
-    default_process_id = st.session_state.selected_process_id
-    if default_process_id is None and first_process_id is not None:
-        default_process_id = first_process_id
-    
-    # Find index for default value
-    default_index = 0
-    if default_process_id is not None:
-        options_list = list(process_options.items())
-        for idx, (label, pid) in enumerate(options_list):
-            if pid == default_process_id:
-                default_index = idx
-                break
-    
+# ── Process selector ───────────────────────────────────────────
+processes_resp = list_processes(limit=50) or {}
+processes = processes_resp.get("processes", [])
+
+process_options = {"All Pipeline Runs": None}
+first_pid = None
+for p in processes:
+    pid = p.get("process_id")
+    ts  = (p.get("started_at") or "")[:19].replace("T", " ")
+    if pid:
+        process_options[f"{ts}  ·  {pid[:14]}…"] = pid
+        if first_pid is None:
+            first_pid = pid
+
+if "summary_pid" not in st.session_state:
+    st.session_state.summary_pid = first_pid
+
+col_sel, col_ref = st.columns([5, 1])
+with col_sel:
     selected_label = st.selectbox(
-        "View summary for:",
+        "View for run:",
         list(process_options.keys()),
-        index=default_index,
-        key="process_selector",
+        index=list(process_options.values()).index(st.session_state.summary_pid)
+            if st.session_state.summary_pid in process_options.values() else 0,
+        label_visibility="collapsed",
     )
-    selected_process_id = process_options[selected_label]
-    # Store selection in session state
-    st.session_state.selected_process_id = selected_process_id
-
-with col2:
-    if st.button("Refresh", key="refresh_summary"):
-        st.session_state.selected_process_id = None
-        st.session_state.last_process_id = None
+    selected_pid = process_options[selected_label]
+    st.session_state.summary_pid = selected_pid
+with col_ref:
+    if st.button("Refresh", use_container_width=True):
         st.rerun()
 
-# ---------------------------------------------------------------------------
-# Load summary data
-# ---------------------------------------------------------------------------
-if selected_process_id != st.session_state.last_process_id:
-    st.session_state.last_process_id = selected_process_id
-
-# Also fetch raw anomalies for debugging
-raw_response = get_anomalies(limit=10000, status=None, process_id=selected_process_id) if selected_process_id else None
-raw_anomalies = raw_response.get("anomalies", []) if raw_response and isinstance(raw_response, dict) else []
-
-summary = get_summary(process_id=selected_process_id)
-
-# Debug info
-with st.expander("Debug Info", expanded=False):
-    st.write(f"Selected Process ID: {selected_process_id}")
-    st.write(f"Raw anomalies fetched: {len(raw_anomalies) if raw_anomalies else 0}")
-    if raw_anomalies and len(raw_anomalies) > 0:
-        st.write("Sample anomalies (first 3):")
-        for anomaly in raw_anomalies[:3]:
-            st.json({
-                "anomaly_id": anomaly.get("anomaly_id"),
-                "process_id": anomaly.get("process_id"),
-                "status": anomaly.get("status"),
-                "amount": anomaly.get("amount"),
-            })
-    st.divider()
-    st.write("Full Summary Response:")
-    st.json(summary)
-if not summary or summary is None:
-    st.error("Unable to load summary data. Make sure the API is running and a pipeline has been executed.")
-    st.stop()
-
-# Handle error responses from API
+# ── Load summary ───────────────────────────────────────────────
+summary = get_summary(process_id=selected_pid) or {}
 if isinstance(summary, dict) and "error" in summary:
-    st.error(f"API Error: {summary.get('error')}")
+    st.error(f"API Error: {summary['error']}")
     st.stop()
 
-# Check if we have valid data
-total_anomalies = summary.get("anomalies_detected", 0)
-if total_anomalies == 0:
-    st.warning("Summary data is empty. Run a pipeline first to generate anomalies.")
+if summary.get("anomalies_detected", 0) == 0:
+    st.markdown(
+        '<div class="banner-info">No pipeline data yet — go to <strong>Data Ingestion</strong> and run an analysis first.</div>',
+        unsafe_allow_html=True,
+    )
     st.stop()
 
-# ---------------------------------------------------------------------------
-# Recovery Metrics
-# ---------------------------------------------------------------------------
-st.subheader("Recovery Impact")
+# ── Financial Impact KPIs ──────────────────────────────────────
+st.markdown('<div class="section-title">Financial Impact</div>', unsafe_allow_html=True)
 
-total_exposure = summary.get("total_exposure_inr", 0)
-total_recovered = summary.get("total_recovered_inr", 0)
+total_exposure   = summary.get("total_exposure_inr", 0)
+total_recovered  = summary.get("total_recovered_inr", 0)
 pending_exposure = summary.get("pending_exposure_inr", 0)
-recovery_rate = summary.get("recovery_rate_pct", 0)
+recovery_rate    = summary.get("recovery_rate_pct", 0)
+total_anomalies  = summary.get("anomalies_detected", 0)
+pending_count    = summary.get("pending_approval", 0)
 
-k1, k2, k3, k4 = st.columns(4)
-k1.metric("Total Exposure Detected", f"₹{total_exposure:,.0f}")
-k2.metric("Recovered / Resolved", f"₹{total_recovered:,.0f}", delta=f"+₹{total_recovered:,.0f}")
-k3.metric("Pending Approval", f"₹{pending_exposure:,.0f}")
-k4.metric("Recovery Rate", f"{recovery_rate:.1f}%")
+c1, c2, c3, c4, c5 = st.columns(5)
+with c1:
+    st.markdown(kpi_card("Anomalies Detected", str(total_anomalies), "total across all categories", "red"), unsafe_allow_html=True)
+with c2:
+    st.markdown(kpi_card("Exposure at Risk", f"₹{total_exposure:,.0f}", "unresolved financial risk", "orange" if total_exposure > 0 else "default"), unsafe_allow_html=True)
+with c3:
+    st.markdown(kpi_card("Value Recovered", f"₹{total_recovered:,.0f}", "cost leakage stopped", "green"), unsafe_allow_html=True)
+with c4:
+    st.markdown(kpi_card("Recovery Rate", f"{recovery_rate:.1f}%", "of total exposure resolved", "green" if recovery_rate > 50 else "orange"), unsafe_allow_html=True)
+with c5:
+    st.markdown(kpi_card("Awaiting Approval", str(pending_count), f"₹{pending_exposure:,.0f} on hold", "orange" if pending_count > 0 else "default"), unsafe_allow_html=True)
 
-st.divider()
+st.markdown('<div class="cs-divider"></div>', unsafe_allow_html=True)
 
-# ---------------------------------------------------------------------------
-# Anomaly breakdown
-# ---------------------------------------------------------------------------
-col_left, col_right = st.columns([3, 2])
+# ── Charts ─────────────────────────────────────────────────────
+st.markdown('<div class="section-title">Breakdown</div>', unsafe_allow_html=True)
+ch1, ch2 = st.columns(2)
 
-with col_left:
-    st.subheader("Anomaly Breakdown")
+with ch1:
+    st.markdown("**Anomaly Types**")
     breakdown = summary.get("anomaly_breakdown", {})
     if breakdown:
-        df_breakdown = pd.DataFrame(
-            list(breakdown.items()), columns=["Type", "Count"]
-        ).sort_values("Count", ascending=False)
-        fig = px.bar(
-            df_breakdown,
-            x="Count",
-            y="Type",
-            orientation="h",
-            color="Count",
-            color_continuous_scale="Oranges",
-        )
-        fig.update_layout(height=280, margin=dict(l=0, r=0, t=0, b=0), showlegend=False)
+        df_b = pd.DataFrame(list(breakdown.items()), columns=["Type", "Count"])
+        df_b["Type"] = df_b["Type"].str.replace("_", " ").str.title()
+        df_b = df_b.sort_values("Count", ascending=True)
+        fig = px.bar(df_b, x="Count", y="Type", orientation="h",
+                     color="Count", color_continuous_scale="Oranges")
+        fig.update_layout(height=260, margin=dict(l=0, r=0, t=0, b=0),
+                          paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                          font_color="#8098b8", showlegend=False, coloraxis_showscale=False)
+        fig.update_xaxes(showgrid=False)
+        fig.update_yaxes(showgrid=False)
         st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info("No anomaly breakdown data yet.")
 
-with col_right:
-    st.subheader("Status Distribution")
+with ch2:
+    st.markdown("**Status Distribution**")
     status_dist = summary.get("status_distribution", {})
     if status_dist:
-        df_status = pd.DataFrame(
-            list(status_dist.items()), columns=["Status", "Count"]
-        )
-        fig2 = px.pie(
-            df_status,
-            values="Count",
-            names="Status",
-            color_discrete_sequence=["#22c55e", "#f59e0b", "#3b82f6", "#ef4444", "#6b7280"],
-        )
-        fig2.update_layout(height=280, margin=dict(l=0, r=0, t=0, b=0))
+        df_s = pd.DataFrame(list(status_dist.items()), columns=["Status", "Count"])
+        df_s["Status"] = df_s["Status"].str.replace("_", " ").str.title()
+        color_seq = ["#22c55e", "#f59e0b", "#3b82f6", "#ef4444", "#64748b"]
+        fig2 = px.pie(df_s, values="Count", names="Status", color_discrete_sequence=color_seq)
+        fig2.update_layout(height=260, margin=dict(l=0, r=0, t=0, b=0),
+                           paper_bgcolor="rgba(0,0,0,0)", font_color="#8098b8",
+                           legend=dict(font=dict(size=11)))
         st.plotly_chart(fig2, use_container_width=True)
-    else:
-        st.info("No status data yet.")
 
-st.divider()
+st.markdown('<div class="cs-divider"></div>', unsafe_allow_html=True)
 
-# ---------------------------------------------------------------------------
-# Top anomaly
-# ---------------------------------------------------------------------------
-st.subheader("Highest Priority Anomaly")
-top_anomaly = summary.get("top_anomaly")
-if top_anomaly:
-    render_anomaly_card(top_anomaly, show_approve_button=False)
-else:
-    st.info("No anomalies detected yet.")
+# ── Top Priority Anomaly ───────────────────────────────────────
+top = summary.get("top_anomaly")
+if top:
+    st.markdown('<div class="section-title">Highest Priority Finding</div>', unsafe_allow_html=True)
+    aps     = top.get("aps_score") or 0
+    atype   = top.get("anomaly_type", "unknown").replace("_", " ").title()
+    status  = top.get("status", "detected")
+    vendor  = top.get("vendor") or "—"
+    conf    = top.get("confidence") or 0
+    root    = top.get("root_cause") or "No root cause available."
+    action  = top.get("suggested_action") or "Review required."
+    bar_col = "#ef4444" if aps > 7 else "#f59e0b" if aps > 4 else "#3b82f6"
 
-st.divider()
+    STATUS_COLORS = {"pending_approval": "orange", "auto_executed": "green", "approved": "green", "detected": "blue"}
+    sc = STATUS_COLORS.get(status, "gray")
 
-# ---------------------------------------------------------------------------
-# Agent health table
-# ---------------------------------------------------------------------------
-st.subheader("Agent Health")
-agent_stats = summary.get("agent_stats", [])
-if agent_stats:
-    df_agents = pd.DataFrame(agent_stats)
-    display_cols = [c for c in ["agent_name", "events_processed", "errors", "avg_duration_ms", "last_seen"] if c in df_agents.columns]
-    st.dataframe(df_agents[display_cols], use_container_width=True, height=300)
-else:
-    st.info("No agent activity recorded yet.")
-
-st.divider()
-
-# ---------------------------------------------------------------------------
-# Data source breakdown
-# ---------------------------------------------------------------------------
-st.subheader("Data Sources")
-source_stats = summary.get("source_stats", {})
-if source_stats:
-    df_sources = pd.DataFrame(
-        list(source_stats.items()), columns=["Source", "Records Ingested"]
-    ).sort_values("Records Ingested", ascending=False)
-    fig3 = px.bar(
-        df_sources,
-        x="Source",
-        y="Records Ingested",
-        color="Records Ingested",
-        color_continuous_scale="Blues",
+    st.markdown(
+        f"""<div class="anomaly-card" style="border-color:#334155;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+                <div>
+                    <span class="badge badge-{sc}" style="margin-right:6px;">{status.replace('_', ' ').upper()}</span>
+                    <span class="badge badge-gray">{atype}</span>
+                </div>
+                <div style="text-align:right;">
+                    <div style="font-size:9px;color:#4a6080;">ACTION PRIORITY</div>
+                    <div style="font-size:1.4rem;font-weight:700;color:{bar_col};">{aps:.2f}<span style="font-size:11px;color:#4a6080;">/10</span></div>
+                </div>
+            </div>
+            <div style="font-size:12px;color:#64748b;margin-bottom:8px;">
+                Vendor: <span style="color:#8098b8;">{vendor}</span> &nbsp;·&nbsp; Confidence: {conf:.0%}
+            </div>
+            <div style="margin-bottom:6px;">
+                <div style="font-size:11px;color:#4a6080;margin-bottom:2px;">ROOT CAUSE</div>
+                <div style="font-size:13px;color:#94a3b8;line-height:1.5;">{root[:300]}</div>
+            </div>
+            <div>
+                <div style="font-size:11px;color:#4a6080;margin-bottom:2px;">SUGGESTED ACTION</div>
+                <div style="font-size:13px;color:#94a3b8;line-height:1.5;">{action[:300]}</div>
+            </div>
+            <div class="score-bar-bg" style="margin-top:12px;">
+                <div class="score-bar" style="width:{int(aps*10)}%;background:{bar_col};"></div>
+            </div>
+        </div>""",
+        unsafe_allow_html=True,
     )
-    fig3.update_layout(height=250, margin=dict(l=0, r=0, t=0, b=0), showlegend=False)
-    st.plotly_chart(fig3, use_container_width=True)
-else:
-    st.info("No source data yet.")
 
-# ---------------------------------------------------------------------------
-# Footer
-# ---------------------------------------------------------------------------
-st.divider()
-col_f1, col_f2 = st.columns(2)
-with col_f1:
-    st.caption(f"API version: {health.get('version', '?')} | Events on bus: {health.get('events_processed', 0)}")
-with col_f2:
-    if st.button("Refresh Summary"):
-        st.rerun()
+st.markdown('<div class="cs-divider"></div>', unsafe_allow_html=True)
+
+# ── Agent Health Table ─────────────────────────────────────────
+st.markdown('<div class="section-title">Agent Health</div>', unsafe_allow_html=True)
+
+agent_stats = summary.get("agent_stats", [])
+AGENT_LABELS = {
+    "agent_01_data_connector":    "01 · Data Connector",
+    "agent_02_normalization":     "02 · Normalization",
+    "agent_03_anomaly_detection": "03 · Anomaly Detection",
+    "agent_04_root_cause":        "04 · Root Cause (LLM)",
+    "agent_05_prioritization":    "05 · Prioritization",
+    "agent_06_merge":             "06 · Merge & Enrich",
+    "agent_07_action_dispatcher": "07 · Action Dispatcher",
+    "agent_08_workflow_executor": "08 · Workflow Executor",
+    "agent_09_audit_trail":       "09 · Audit Trail",
+}
+
+if agent_stats:
+    for a in agent_stats:
+        key    = a.get("agent_name", "")
+        label  = AGENT_LABELS.get(key, key)
+        events = a.get("events_processed", 0)
+        errors = a.get("errors", 0)
+        avg_ms = a.get("avg_duration_ms", 0)
+        seen   = (a.get("last_seen") or "")[:19].replace("T", " ")
+
+        if events == 0:
+            css, dot_color = "agent-gray", "#334155"
+        elif errors == 0:
+            css, dot_color = "agent-green", "#22c55e"
+        elif errors / max(events, 1) < 0.25:
+            css, dot_color = "agent-orange", "#f59e0b"
+        else:
+            css, dot_color = "agent-red", "#ef4444"
+
+        col_agent, col_events, col_errors, col_latency, col_seen = st.columns([3, 1, 1, 1, 2])
+        with col_agent:
+            st.markdown(
+                f'<div style="font-size:13px;color:#cbd5e1;padding:8px 0;font-weight:500;">'
+                f'<span style="color:{dot_color};margin-right:6px;">●</span>{label}</div>',
+                unsafe_allow_html=True,
+            )
+        with col_events:
+            st.markdown(f'<div style="font-size:13px;color:#8098b8;padding:8px 0;text-align:right;">{events}</div>', unsafe_allow_html=True)
+        with col_errors:
+            ec = "#ef4444" if errors > 0 else "#334155"
+            st.markdown(f'<div style="font-size:13px;color:{ec};padding:8px 0;text-align:right;">{errors}</div>', unsafe_allow_html=True)
+        with col_latency:
+            st.markdown(f'<div style="font-size:13px;color:#8098b8;padding:8px 0;text-align:right;">{avg_ms:.0f}ms</div>', unsafe_allow_html=True)
+        with col_seen:
+            st.markdown(f'<div style="font-size:12px;color:#4a6080;padding:8px 0;text-align:right;">{seen or "—"}</div>', unsafe_allow_html=True)
+
+    # Header
+    st.markdown(
+        '<div style="display:flex;justify-content:flex-end;gap:4px;font-size:10px;color:#334155;text-transform:uppercase;letter-spacing:0.08em;margin-top:4px;">'
+        '<span style="width:80px;text-align:right;">Events</span>'
+        '<span style="width:60px;text-align:right;">Errors</span>'
+        '<span style="width:70px;text-align:right;">Avg Lat</span>'
+        '<span style="width:140px;text-align:right;">Last Active</span>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+# ── Footer ─────────────────────────────────────────────────────
+st.markdown('<div class="cs-divider"></div>', unsafe_allow_html=True)
+st.markdown(
+    f'<div style="text-align:center;color:#1e3050;font-size:11px;">'
+    f'CostSense AI  ·  API v{health.get("version","?")}  ·  {health.get("events_processed",0):,} events on bus</div>',
+    unsafe_allow_html=True,
+)

@@ -1,7 +1,11 @@
 """
-GET  /anomalies                    — all anomalies ranked by APS
-GET  /anomalies/pending-approval   — anomalies awaiting human sign-off
-POST /anomalies/{id}/approve       — approve a pending anomaly
+GET    /anomalies                    — all anomalies ranked by APS
+GET    /anomalies/pending-approval   — anomalies awaiting human sign-off
+POST   /anomalies/{id}/approve       — approve a pending anomaly
+POST   /anomalies/{id}/reject        — reject a pending anomaly
+PATCH  /anomalies/{id}/assign        — assign anomaly to a reviewer
+POST   /anomalies/bulk-approve       — approve multiple anomalies at once
+POST   /anomalies/bulk-reject        — reject multiple anomalies at once
 """
 
 from __future__ import annotations
@@ -12,23 +16,34 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.db import (
-    get_anomaly_by_id,
+    assign_anomaly,
+    bulk_approve_anomalies,
+    bulk_reject_anomalies,
     get_anomalies,
+    get_anomaly_by_id,
     get_session,
+    reject_anomaly,
 )
 from models.schemas import (
     AnomalyListResponse,
     AnomalyOut,
     ApproveAnomalyIn,
     ApproveAnomalyOut,
+    AssignAnomalyIn,
+    AssignAnomalyOut,
+    BulkApproveIn,
+    BulkApproveOut,
+    BulkRejectIn,
+    BulkRejectOut,
     PendingApprovalResponse,
+    RejectAnomalyIn,
+    RejectAnomalyOut,
 )
 
 router = APIRouter(prefix="/anomalies", tags=["anomalies"])
 
 
 def _orm_to_schema(row) -> AnomalyOut:
-    """Convert an ORM Anomaly row to AnomalyOut schema."""
     return AnomalyOut(
         anomaly_id=str(row.anomaly_id),
         record_id=str(row.record_id) if row.record_id else None,
@@ -52,9 +67,12 @@ def _orm_to_schema(row) -> AnomalyOut:
         approved_by=row.approved_by,
         approved_at=row.approved_at,
         approval_notes=row.approval_notes,
+        assigned_to=row.assigned_to,
+        rejected_by=row.rejected_by,
+        rejection_reason=row.rejection_reason,
+        rejected_at=row.rejected_at,
         detected_at=row.detected_at,
         updated_at=row.updated_at,
-        # Flattened spend record fields (optional, denormalized from event payload)
         vendor=None,
         amount=None,
         currency=None,
@@ -66,26 +84,17 @@ def _orm_to_schema(row) -> AnomalyOut:
 
 @router.get("", response_model=AnomalyListResponse)
 async def list_anomalies(
-    status: Optional[str] = Query(default=None, description="Filter by status"),
-    process_id: Optional[str] = Query(default=None, description="Filter by process run"),
+    status: Optional[str] = Query(default=None),
+    process_id: Optional[str] = Query(default=None),
+    assigned_to: Optional[str] = Query(default=None),
     limit: int = Query(default=200, ge=1, le=1000),
     session: AsyncSession = Depends(get_session),
 ):
-    """Return all anomalies sorted by APS descending, optionally filtered by status or process."""
-    import structlog
-    logger = structlog.get_logger(__name__)
-    
-    logger.info("list_anomalies.request", status=status, process_id=process_id, limit=limit)
-    
-    rows = await get_anomalies(session, status=status, process_id=process_id, limit=limit)
-    
-    logger.info("list_anomalies.fetched", count=len(rows), process_id=process_id)
-    
+    rows = await get_anomalies(session, status=status, process_id=process_id, assigned_to=assigned_to, limit=limit)
     anomalies = [_orm_to_schema(r) for r in rows]
 
-    # Compute exposure and recovery totals
     total_exposure = sum(
-        (a.as_score or 0) * 10000  # Approximate INR exposure from AS score
+        (a.as_score or 0) * 10000
         for a in anomalies
         if a.status not in ("auto_executed", "approved")
     )
@@ -105,12 +114,48 @@ async def list_anomalies(
 
 @router.get("/pending-approval", response_model=PendingApprovalResponse)
 async def list_pending_approval(
+    assigned_to: Optional[str] = Query(default=None),
     session: AsyncSession = Depends(get_session),
 ):
-    """Return anomalies currently waiting for human approval."""
-    rows = await get_anomalies(session, status="pending_approval")
+    rows = await get_anomalies(session, status="pending_approval", assigned_to=assigned_to)
     anomalies = [_orm_to_schema(r) for r in rows]
     return PendingApprovalResponse(pending=anomalies, count=len(anomalies))
+
+
+@router.post("/bulk-approve", response_model=BulkApproveOut)
+async def bulk_approve(
+    body: BulkApproveIn,
+    session: AsyncSession = Depends(get_session),
+):
+    approved, skipped = await bulk_approve_anomalies(
+        session,
+        anomaly_ids=body.anomaly_ids,
+        approved_by=body.approved_by,
+        notes=body.notes,
+    )
+    return BulkApproveOut(
+        approved=approved,
+        skipped=skipped,
+        message=f"Approved {approved} anomalies, skipped {skipped}.",
+    )
+
+
+@router.post("/bulk-reject", response_model=BulkRejectOut)
+async def bulk_reject(
+    body: BulkRejectIn,
+    session: AsyncSession = Depends(get_session),
+):
+    rejected, skipped = await bulk_reject_anomalies(
+        session,
+        anomaly_ids=body.anomaly_ids,
+        rejected_by=body.rejected_by,
+        reason=body.reason,
+    )
+    return BulkRejectOut(
+        rejected=rejected,
+        skipped=skipped,
+        message=f"Rejected {rejected} anomalies, skipped {skipped}.",
+    )
 
 
 @router.post("/{anomaly_id}/approve", response_model=ApproveAnomalyOut)
@@ -119,15 +164,11 @@ async def approve_anomaly_endpoint(
     body: ApproveAnomalyIn,
     session: AsyncSession = Depends(get_session),
 ):
-    """Approve a pending anomaly and trigger workflow execution."""
     row = await get_anomaly_by_id(session, anomaly_id)
     if not row:
         raise HTTPException(status_code=404, detail=f"Anomaly {anomaly_id} not found")
     if row.status != "pending_approval":
-        raise HTTPException(
-            status_code=400,
-            detail=f"Anomaly is not pending approval (current status: {row.status})",
-        )
+        raise HTTPException(status_code=400, detail=f"Status is '{row.status}', not pending_approval")
 
     from agents.agent_08_workflow_executor import WorkflowExecutorAgent
     from core.bus import bus
@@ -140,8 +181,44 @@ async def approve_anomaly_endpoint(
         notes=body.notes,
     )
 
-    updated_row = await get_anomaly_by_id(session, anomaly_id)
+    updated = await get_anomaly_by_id(session, anomaly_id)
     return ApproveAnomalyOut(
         message=f"Anomaly {anomaly_id} approved and execution triggered.",
-        anomaly=_orm_to_schema(updated_row),
+        anomaly=_orm_to_schema(updated),
+    )
+
+
+@router.post("/{anomaly_id}/reject", response_model=RejectAnomalyOut)
+async def reject_anomaly_endpoint(
+    anomaly_id: str,
+    body: RejectAnomalyIn,
+    session: AsyncSession = Depends(get_session),
+):
+    row = await get_anomaly_by_id(session, anomaly_id)
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Anomaly {anomaly_id} not found")
+    if row.status != "pending_approval":
+        raise HTTPException(status_code=400, detail=f"Status is '{row.status}', not pending_approval")
+
+    updated = await reject_anomaly(session, anomaly_id, rejected_by=body.rejected_by, reason=body.reason)
+    return RejectAnomalyOut(
+        message=f"Anomaly {anomaly_id} rejected.",
+        anomaly=_orm_to_schema(updated),
+    )
+
+
+@router.patch("/{anomaly_id}/assign", response_model=AssignAnomalyOut)
+async def assign_anomaly_endpoint(
+    anomaly_id: str,
+    body: AssignAnomalyIn,
+    session: AsyncSession = Depends(get_session),
+):
+    row = await get_anomaly_by_id(session, anomaly_id)
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Anomaly {anomaly_id} not found")
+
+    updated = await assign_anomaly(session, anomaly_id, assigned_to=body.assigned_to)
+    return AssignAnomalyOut(
+        message=f"Anomaly {anomaly_id} assigned to {body.assigned_to}.",
+        anomaly=_orm_to_schema(updated),
     )

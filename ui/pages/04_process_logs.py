@@ -1,239 +1,219 @@
 """
 Page 4 — Process Trace Viewer
-
-Select a process run, see a Gantt-style waterfall of agent durations,
-browse the full log table, and inspect input/output JSON per log entry.
+Gantt waterfall + step-by-step log with payload inspector.
 """
-
-import json
 
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+st.set_page_config(page_title="Process Logs — CostSense AI", page_icon="⚡", layout="wide")
+
+from ui.components.theme import inject_global_css, page_header, kpi_card
 from ui.components.api_client import get_health, get_process_logs, get_process_trace, list_processes
 
-st.set_page_config(page_title="Process Logs — CostSense AI", page_icon="�", layout="wide")
+inject_global_css()
 
-st.title("Process Trace Viewer")
-st.caption("Full input/output trace for every agent, per pipeline run.")
+# ── Sidebar ────────────────────────────────────────────────────
+with st.sidebar:
+    st.markdown("""
+    <div style="padding: 12px 4px 20px;">
+        <div style="font-size:1.1rem; font-weight:800; color:#e8f0fe;">⚡ CostSense AI</div>
+        <div style="font-size:10px; color:#4a6080; text-transform:uppercase; letter-spacing:0.1em; margin-top:2px;">Process Logs</div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.divider()
+    st.markdown('<div style="font-size:11px; font-weight:600; color:#4a6080; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:8px;">Filters</div>', unsafe_allow_html=True)
 
-# ---------------------------------------------------------------------------
-# Health check
-# ---------------------------------------------------------------------------
+    status_filter = st.multiselect("Status", ["success", "error", "skipped"], default=[])
+    agent_filter  = st.multiselect("Agent", [
+        "agent_01_data_connector", "agent_02_normalization",
+        "agent_03_anomaly_detection", "agent_04_root_cause",
+        "agent_05_prioritization", "agent_06_merge",
+        "agent_07_action_dispatcher", "agent_08_workflow_executor",
+        "agent_09_audit_trail",
+    ], default=[])
+
+# ── Health ─────────────────────────────────────────────────────
 health = get_health()
 if health is None:
-    st.error("Cannot reach API server.")
+    st.markdown('<div class="banner-error">Cannot reach API server.</div>', unsafe_allow_html=True)
     st.stop()
 
-# ---------------------------------------------------------------------------
-# Process selector
-# ---------------------------------------------------------------------------
-processes_resp = list_processes(limit=50)
-if processes_resp is None:
-    st.error("Failed to load process list from API. Make sure the API is running.")
-    st.stop()
+page_header("Process Trace", "Full step-by-step execution log for each pipeline run.")
 
-if isinstance(processes_resp, dict) and "error" in processes_resp:
-    st.error(f"API Error: {processes_resp.get('error')}")
-    st.stop()
+# ── Process selector ───────────────────────────────────────────
+processes_resp = list_processes(limit=50) or {}
+processes = processes_resp.get("processes", [])
 
-processes = processes_resp.get("processes", []) if processes_resp else []
-
-if not processes or len(processes) == 0:
-    st.info("No pipeline runs found yet. Go to **Data Input** and run a pipeline first.")
+if not processes:
+    st.markdown(
+        '<div class="banner-info">No pipeline runs found yet — go to <strong>Data Ingestion</strong> to run your first analysis.</div>',
+        unsafe_allow_html=True,
+    )
     st.stop()
 
 process_options = {}
 for p in processes:
     pid = p.get("process_id")
-    ts = (p.get("started_at") or "Unknown")[:19].replace("T", " ")
-    record_count = p.get("agent_count", p.get("record_count", "?"))
-    label = f"{ts} — {pid[:12] if pid else 'unknown'}… ({record_count} steps)"
+    ts  = (p.get("started_at") or "Unknown")[:19].replace("T", " ")
+    cnt = p.get("agent_count", p.get("record_count", "?"))
     if pid:
-        process_options[label] = pid
+        process_options[f"{ts}  ·  {pid[:14]}…  ({cnt} steps)"] = pid
 
 if not process_options:
-    st.error("Could not parse process runs. Check API response.")
+    st.error("Could not parse process list.")
     st.stop()
 
-selected_label = st.selectbox("Select a process run", list(process_options.keys()))
-selected_pid = process_options[selected_label]
+col_sel, col_ref = st.columns([5, 1])
+with col_sel:
+    selected_label = st.selectbox("Pipeline run", list(process_options.keys()), label_visibility="collapsed")
+    selected_pid = process_options[selected_label]
+with col_ref:
+    if st.button("Refresh", use_container_width=True):
+        st.rerun()
 
-# ---------------------------------------------------------------------------
-# Sidebar filters
-# ---------------------------------------------------------------------------
-with st.sidebar:
-    st.header("Filters")
-    status_filter = st.multiselect(
-        "Status", ["success", "error", "skipped"], default=[]
-    )
-    agent_filter = st.multiselect(
-        "Agent",
-        [
-            "agent_01_data_connector",
-            "agent_02_normalization",
-            "agent_03_anomaly_detection",
-            "agent_04_root_cause",
-            "agent_05_prioritization",
-            "agent_06_merge",
-            "agent_07_action_dispatcher",
-            "agent_08_workflow_executor",
-            "agent_09_audit_trail",
-        ],
-        default=[],
-    )
-
-# ---------------------------------------------------------------------------
-# Load trace
-# ---------------------------------------------------------------------------
-trace_resp = get_process_trace(selected_pid)
-if trace_resp is None:
-    st.error(f"Failed to load process trace for {selected_pid}. API unreachable.")
-    st.stop()
-
+# ── Load trace ─────────────────────────────────────────────────
+trace_resp = get_process_trace(selected_pid) or {}
 if isinstance(trace_resp, dict) and "error" in trace_resp:
-    st.error(f"API Error: {trace_resp.get('error')}")
+    st.error(f"API Error: {trace_resp['error']}")
     st.stop()
 
-logs = trace_resp.get("logs", []) if trace_resp else []
+logs = trace_resp.get("logs", [])
 
-# Apply filters
 if status_filter:
     logs = [l for l in logs if l.get("status") in status_filter]
 if agent_filter:
     logs = [l for l in logs if l.get("agent_name") in agent_filter]
 
-if not logs:
-    st.warning(f"No log entries found for process {selected_pid[:8]}… with current filters. Try adjusting filters.")
-    # Still show KPIs even if filtered
-    if trace_resp.get("logs"):
-        st.info("Clear the filters above to see all logs for this process.")
-
-# ---------------------------------------------------------------------------
-# Summary KPIs
-# ---------------------------------------------------------------------------
+# ── KPIs ───────────────────────────────────────────────────────
 total_steps = len(logs)
 errors = sum(1 for l in logs if l.get("status") == "error")
 total_ms = sum(l.get("duration_ms") or 0 for l in logs)
-agents_involved = len({l.get("agent_name") for l in logs})
+agents_inv = len({l.get("agent_name") for l in logs})
 
-k1, k2, k3, k4 = st.columns(4)
-k1.metric("Total Steps", total_steps)
-k2.metric("Errors", errors)
-k3.metric("Agents Involved", agents_involved)
-k4.metric("Total Duration", f"{total_ms:,}ms")
+c1, c2, c3, c4 = st.columns(4)
+with c1:
+    st.markdown(kpi_card("Steps Executed", str(total_steps), "in selected run", "blue"), unsafe_allow_html=True)
+with c2:
+    st.markdown(kpi_card("Errors", str(errors), "in selected run", "red" if errors > 0 else "green"), unsafe_allow_html=True)
+with c3:
+    st.markdown(kpi_card("Agents Involved", str(agents_inv), "unique agents", "purple"), unsafe_allow_html=True)
+with c4:
+    st.markdown(kpi_card("Total Duration", f"{total_ms:,}ms", "wall-clock time", "default"), unsafe_allow_html=True)
 
-st.divider()
-
-# Show remaining content only if we have logs
-if logs:
-    # ---------------------------------------------------------------------------
-    # Gantt / Waterfall Chart
-    # ---------------------------------------------------------------------------
-    st.subheader("Agent Execution Waterfall")
-
-    gantt_data = []
-    for log in logs:
-        if log.get("started_at"):
-            gantt_data.append(
-                {
-                    "Agent": log["agent_name"].replace("agent_0", "A").replace("agent_", "A"),
-                    "Start": log["started_at"],
-                    "Finish": log.get("completed_at") or log["started_at"],
-                    "Status": log.get("status", "success"),
-                    "Duration (ms)": log.get("duration_ms") or 0,
-                }
-            )
-
-    if gantt_data:
-        df_gantt = pd.DataFrame(gantt_data)
-        color_map = {"success": "#22c55e", "error": "#ef4444", "skipped": "#6b7280"}
-        fig = px.timeline(
-            df_gantt,
-            x_start="Start",
-            x_end="Finish",
-            y="Agent",
-            color="Status",
-            color_discrete_map=color_map,
-            hover_data=["Duration (ms)"],
-        )
-        fig.update_layout(height=350, margin=dict(l=0, r=0, t=10, b=0))
-        fig.update_yaxes(autorange="reversed")
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info("Timestamps not available for Gantt chart — showing table only.")
-
-    st.divider()
-
-    # ---------------------------------------------------------------------------
-    # Log table
-    # ---------------------------------------------------------------------------
-    st.subheader("Step-by-Step Log")
-
-    table_data = []
-    for i, log in enumerate(logs):
-        table_data.append(
-            {
-                "#": i + 1,
-                "Agent": log.get("agent_name", ""),
-                "Topic In": log.get("topic_in") or "—",
-                "Topic Out": log.get("topic_out") or "—",
-                "Status": log.get("status", ""),
-                "Duration (ms)": log.get("duration_ms") or 0,
-                "Started": (log.get("started_at") or "")[:19].replace("T", " "),
-                "Error": (log.get("error_message") or "")[:80],
-            }
-        )
-
-    df_table = pd.DataFrame(table_data)
-    selected_rows = st.dataframe(
-        df_table,
-        use_container_width=True,
-        height=300,
-        on_select="rerun",
-        selection_mode="single-row",
+if not logs:
+    st.markdown(
+        '<div class="banner-info">No log entries found for this run with the current filters.</div>',
+        unsafe_allow_html=True,
     )
+    st.stop()
 
-    # ---------------------------------------------------------------------------
-    # Input / Output JSON Inspector
-    # ---------------------------------------------------------------------------
-    st.divider()
-    st.subheader("Payload Inspector")
+st.markdown('<div class="cs-divider"></div>', unsafe_allow_html=True)
 
-    selected_indices = (
-        selected_rows.selection.get("rows", []) if hasattr(selected_rows, "selection") else []
+# ── Gantt chart ────────────────────────────────────────────────
+st.markdown('<div class="section-title">Execution Waterfall</div>', unsafe_allow_html=True)
+
+gantt_data = []
+for log in logs:
+    if log.get("started_at"):
+        gantt_data.append({
+            "Agent":       log["agent_name"].replace("agent_0", "A").replace("agent_", "A"),
+            "Start":       log["started_at"],
+            "Finish":      log.get("completed_at") or log["started_at"],
+            "Status":      log.get("status", "success"),
+            "Duration ms": log.get("duration_ms") or 0,
+        })
+
+if gantt_data:
+    df_gantt = pd.DataFrame(gantt_data)
+    color_map = {"success": "#22c55e", "error": "#ef4444", "skipped": "#334155"}
+    fig = px.timeline(
+        df_gantt, x_start="Start", x_end="Finish", y="Agent",
+        color="Status", color_discrete_map=color_map,
+        hover_data=["Duration ms"],
     )
-
-    if selected_indices:
-        row_idx = selected_indices[0]
-        log = logs[row_idx]
-
-        st.markdown(f"**Agent:** `{log.get('agent_name', '')}` | **Status:** `{log.get('status', '')}` | **Duration:** `{log.get('duration_ms') or 0}ms`")
-        if log.get("error_message"):
-            st.error(f"Error: {log['error_message']}")
-
-        inp_col, out_col = st.columns(2)
-
-        with inp_col:
-            st.markdown("**Input Payload**")
-            input_payload = log.get("input_payload") or {}
-            try:
-                st.json(input_payload)
-            except Exception:
-                st.code(str(input_payload), language="json")
-
-        with out_col:
-            st.markdown("**Output Payload**")
-            output_payload = log.get("output_payload")
-            if output_payload:
-                try:
-                    st.json(output_payload)
-                except Exception:
-                    st.code(str(output_payload), language="json")
-            else:
-                st.caption("No output payload (agent did not publish an event).")
-    else:
-        st.info("Click a row in the table above to inspect its input/output payloads.")
+    fig.update_layout(
+        height=320,
+        margin=dict(l=0, r=0, t=10, b=0),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font_color="#8098b8",
+    )
+    fig.update_yaxes(autorange="reversed")
+    st.plotly_chart(fig, use_container_width=True)
 else:
-    st.info("No log entries to display. Check your filters or try a different process run.")
+    st.info("Timestamps not available for waterfall — showing log table only.")
+
+st.markdown('<div class="cs-divider"></div>', unsafe_allow_html=True)
+
+# ── Log table ──────────────────────────────────────────────────
+st.markdown('<div class="section-title">Step-by-Step Log — Click a row to inspect payloads</div>', unsafe_allow_html=True)
+
+table_data = []
+for i, log in enumerate(logs):
+    table_data.append({
+        "#":            i + 1,
+        "Agent":        log.get("agent_name", ""),
+        "Topic In":     log.get("topic_in") or "—",
+        "Topic Out":    log.get("topic_out") or "—",
+        "Status":       log.get("status", ""),
+        "Duration ms":  log.get("duration_ms") or 0,
+        "Started":      (log.get("started_at") or "")[:19].replace("T", " "),
+        "Error":        (log.get("error_message") or "")[:80],
+    })
+
+selected_rows = st.dataframe(
+    pd.DataFrame(table_data),
+    use_container_width=True,
+    height=280,
+    hide_index=True,
+    on_select="rerun",
+    selection_mode="single-row",
+)
+
+# ── Payload inspector ──────────────────────────────────────────
+st.markdown('<div class="cs-divider"></div>', unsafe_allow_html=True)
+st.markdown('<div class="section-title">Payload Inspector</div>', unsafe_allow_html=True)
+
+selected_indices = (
+    selected_rows.selection.get("rows", []) if hasattr(selected_rows, "selection") else []
+)
+
+if selected_indices:
+    row_idx = selected_indices[0]
+    log = logs[row_idx]
+    status = log.get("status", "")
+    status_color = "#22c55e" if status == "success" else "#ef4444"
+
+    st.markdown(
+        f"""<div class="anomaly-card" style="margin-bottom:12px;">
+            <span class="badge badge-{'green' if status == 'success' else 'red'}" style="margin-right:8px;">{status.upper()}</span>
+            <span style="font-size:12px;color:#8098b8;">{log.get('agent_name','')}</span>
+            <span style="font-size:12px;color:#4a6080;margin-left:12px;">·  {log.get('duration_ms') or 0}ms</span>
+        </div>""",
+        unsafe_allow_html=True,
+    )
+
+    if log.get("error_message"):
+        st.markdown(
+            f'<div class="banner-error">{log["error_message"]}</div>',
+            unsafe_allow_html=True,
+        )
+
+    col_in, col_out = st.columns(2)
+    with col_in:
+        st.markdown("**Input Payload**")
+        st.json(log.get("input_payload") or {})
+    with col_out:
+        st.markdown("**Output Payload**")
+        out = log.get("output_payload")
+        if out:
+            st.json(out)
+        else:
+            st.markdown('<div class="banner-info">No output payload — agent did not publish an event.</div>', unsafe_allow_html=True)
+else:
+    st.markdown(
+        '<div class="banner-info">Click any row in the table above to inspect its input/output payloads.</div>',
+        unsafe_allow_html=True,
+    )

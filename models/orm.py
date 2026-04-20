@@ -112,6 +112,12 @@ class Anomaly(Base):
     approved_at = Column(DateTime(timezone=True), nullable=True)
     approval_notes = Column(Text, nullable=True)
 
+    # Human-in-the-loop fields (assignment + rejection)
+    assigned_to = Column(String(255), nullable=True)
+    rejected_by = Column(String(255), nullable=True)
+    rejection_reason = Column(Text, nullable=True)
+    rejected_at = Column(DateTime(timezone=True), nullable=True)
+
     detected_at = Column(DateTime(timezone=True), nullable=False, default=_now)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)
 
@@ -124,6 +130,7 @@ class Anomaly(Base):
         Index("idx_anomaly_aps", "aps_score"),
         Index("idx_anomaly_process", "process_id"),
         Index("idx_anomaly_record", "record_id"),
+        Index("idx_anomaly_assigned_to", "assigned_to"),
     )
 
 
