@@ -1,0 +1,1991 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>CostSense AI — Cost Intelligence Platform</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #07070f;
+    --surface: #0e0e1c;
+    --card: #14142a;
+    --card2: #1a1a35;
+    --border: #252545;
+    --border2: #1e1e3a;
+    --accent1: #7c3aed;
+    --accent2: #4f46e5;
+    --accent-grad: linear-gradient(135deg, #7c3aed, #4f46e5);
+    --text: #f1f5f9;
+    --muted: #94a3b8;
+    --muted2: #64748b;
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --info: #3b82f6;
+    --sidebar-w: 252px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); overflow: hidden; }
+  
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--surface); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--accent1); }
+
+  /* LAYOUT */
+  #app { display: flex; height: 100vh; }
+
+  /* SIDEBAR */
+  #sidebar {
+    width: var(--sidebar-w);
+    min-width: var(--sidebar-w);
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+    position: relative;
+    z-index: 100;
+  }
+  .sidebar-logo {
+    padding: 20px 20px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .logo-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+  }
+  .logo-icon {
+    width: 36px; height: 36px;
+    background: var(--accent-grad);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    box-shadow: 0 0 20px rgba(124,58,237,0.4);
+  }
+  .logo-text { font-size: 15px; font-weight: 700; color: var(--text); line-height: 1.2; }
+  .logo-sub { font-size: 10px; color: var(--muted); font-weight: 400; }
+  
+  .sidebar-nav { flex: 1; padding: 12px 10px; overflow-y: auto; }
+  .nav-section-label {
+    font-size: 10px; font-weight: 600; color: var(--muted2);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    padding: 8px 10px 4px;
+  }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 12px; border-radius: 8px;
+    cursor: pointer; text-decoration: none;
+    color: var(--muted); font-size: 13.5px; font-weight: 500;
+    transition: all 0.18s ease;
+    margin-bottom: 2px;
+  }
+  .nav-item:hover { background: var(--card); color: var(--text); }
+  .nav-item.active { background: rgba(124,58,237,0.18); color: #a78bfa; }
+  .nav-item.active .nav-icon { color: #a78bfa; }
+  .nav-icon { font-size: 16px; width: 20px; text-align: center; flex-shrink: 0; }
+  .nav-badge {
+    margin-left: auto; font-size: 10px; font-weight: 600;
+    background: var(--accent1); color: white;
+    padding: 1px 6px; border-radius: 20px;
+    min-width: 18px; text-align: center;
+  }
+  .nav-badge.danger { background: var(--danger); }
+
+  .sidebar-footer {
+    padding: 12px 14px;
+    border-top: 1px solid var(--border);
+    font-size: 11px; color: var(--muted2);
+  }
+  .status-dot-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+  .sdot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .sdot.online { background: var(--success); box-shadow: 0 0 6px var(--success); animation: pulse 2s infinite; }
+  .sdot.offline { background: var(--muted2); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+  /* MAIN */
+  #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* TOPBAR */
+  #topbar {
+    height: 56px; min-height: 56px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center;
+    padding: 0 24px; gap: 16px;
+  }
+  .topbar-title { font-size: 16px; font-weight: 600; color: var(--text); }
+  .topbar-sub { font-size: 12px; color: var(--muted); margin-left: 8px; }
+  .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+  .api-status-pill {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 12px; border-radius: 20px;
+    background: var(--card); border: 1px solid var(--border);
+    font-size: 12px; color: var(--muted); cursor: pointer;
+    transition: all 0.2s;
+  }
+  .api-status-pill:hover { border-color: var(--accent1); }
+  .api-status-pill .sdot { width: 6px; height: 6px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 16px; border-radius: 8px;
+    border: none; cursor: pointer; font-size: 13px; font-weight: 500;
+    font-family: 'Inter', sans-serif;
+    transition: all 0.2s; text-decoration: none;
+  }
+  .btn-primary { background: var(--accent-grad); color: white; }
+  .btn-primary:hover { opacity: 0.88; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(124,58,237,0.4); }
+  .btn-secondary { background: var(--card2); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { background: var(--card); border-color: var(--accent1); }
+  .btn-success { background: rgba(16,185,129,0.15); color: var(--success); border: 1px solid rgba(16,185,129,0.3); }
+  .btn-success:hover { background: rgba(16,185,129,0.25); }
+  .btn-danger { background: rgba(239,68,68,0.12); color: var(--danger); border: 1px solid rgba(239,68,68,0.25); }
+  .btn-danger:hover { background: rgba(239,68,68,0.22); }
+  .btn-sm { padding: 5px 12px; font-size: 12px; }
+  .btn-xs { padding: 3px 10px; font-size: 11px; border-radius: 6px; }
+
+  /* CONTENT */
+  #content { flex: 1; overflow-y: auto; padding: 24px; }
+
+  /* PAGE */
+  .page { display: none; animation: fadeIn 0.25s ease; }
+  .page.active { display: block; }
+  @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+
+  /* CARDS */
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px;
+  }
+  .card-sm { padding: 14px 16px; }
+  .card-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .card-title { font-size: 14px; font-weight: 600; color: var(--text); }
+  .card-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  /* METRIC CARDS */
+  .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+  .metric-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px 20px;
+    position: relative; overflow: hidden;
+    transition: border-color 0.2s, transform 0.2s;
+  }
+  .metric-card:hover { border-color: var(--accent1); transform: translateY(-2px); }
+  .metric-card::before {
+    content: ''; position: absolute;
+    top: 0; left: 0; right: 0; height: 2px;
+    background: var(--accent-grad);
+  }
+  .metric-card.success::before { background: var(--success); }
+  .metric-card.warning::before { background: var(--warning); }
+  .metric-card.danger::before { background: var(--danger); }
+  .metric-card.info::before { background: var(--info); }
+  .metric-icon {
+    width: 36px; height: 36px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; margin-bottom: 12px;
+  }
+  .metric-icon.purple { background: rgba(124,58,237,0.15); }
+  .metric-icon.success { background: rgba(16,185,129,0.15); }
+  .metric-icon.warning { background: rgba(245,158,11,0.15); }
+  .metric-icon.danger { background: rgba(239,68,68,0.15); }
+  .metric-icon.info { background: rgba(59,130,246,0.15); }
+  .metric-value { font-size: 26px; font-weight: 700; color: var(--text); line-height: 1.1; }
+  .metric-label { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .metric-delta { font-size: 11px; margin-top: 6px; }
+  .metric-delta.up { color: var(--success); }
+  .metric-delta.down { color: var(--danger); }
+
+  /* GRIDS */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  .grid-auto { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+
+  /* TABLES */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    padding: 10px 12px; text-align: left;
+    background: var(--surface); color: var(--muted);
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.06em; border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  tbody tr { border-bottom: 1px solid var(--border2); transition: background 0.12s; }
+  tbody tr:hover { background: rgba(124,58,237,0.06); cursor: pointer; }
+  tbody td { padding: 10px 12px; vertical-align: middle; }
+  tbody tr.selected { background: rgba(124,58,237,0.12); }
+
+  /* BADGES */
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 8px; border-radius: 20px;
+    font-size: 11px; font-weight: 500; white-space: nowrap;
+  }
+  .badge-purple { background: rgba(124,58,237,0.18); color: #a78bfa; }
+  .badge-success { background: rgba(16,185,129,0.15); color: var(--success); }
+  .badge-warning { background: rgba(245,158,11,0.15); color: var(--warning); }
+  .badge-danger { background: rgba(239,68,68,0.12); color: var(--danger); }
+  .badge-info { background: rgba(59,130,246,0.12); color: var(--info); }
+  .badge-muted { background: rgba(148,163,184,0.1); color: var(--muted); }
+  .badge-cyan { background: rgba(6,182,212,0.12); color: #22d3ee; }
+  .badge-orange { background: rgba(249,115,22,0.12); color: #fb923c; }
+
+  /* ANOMALY TYPE COLORS */
+  .type-duplicate_payment { border-left: 3px solid var(--danger) !important; }
+  .type-cloud_waste { border-left: 3px solid var(--warning) !important; }
+  .type-unused_saas { border-left: 3px solid #8b5cf6 !important; }
+  .type-vendor_rate_anomaly { border-left: 3px solid var(--info) !important; }
+  .type-sla_penalty_risk { border-left: 3px solid #06b6d4 !important; }
+
+  /* AGENT GRID */
+  .agent-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .agent-card {
+    background: var(--card2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px;
+    transition: border-color 0.2s, transform 0.2s;
+  }
+  .agent-card:hover { border-color: var(--accent1); transform: translateY(-1px); }
+  .agent-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .agent-num {
+    width: 26px; height: 26px; border-radius: 7px;
+    background: var(--accent-grad); color: white;
+    font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .agent-name { font-size: 12px; font-weight: 600; color: var(--text); }
+  .agent-role { font-size: 10px; color: var(--muted); }
+  .agent-stat { font-size: 11px; color: var(--muted); }
+  .agent-stat span { color: var(--text); font-weight: 600; }
+  .status-indicator {
+    width: 8px; height: 8px; border-radius: 50%;
+    margin-left: auto; flex-shrink: 0;
+  }
+  .status-indicator.active { background: var(--success); box-shadow: 0 0 8px var(--success); animation: pulse 2s infinite; }
+  .status-indicator.idle { background: var(--muted2); }
+  .status-indicator.error { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+
+  /* TOPIC PILLS */
+  .topics-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+  .topic-pill {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 12px; border-radius: 20px;
+    background: var(--card2); border: 1px solid var(--border);
+    font-size: 12px; cursor: default;
+  }
+  .topic-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent1); }
+  .topic-count { font-weight: 700; color: var(--text); }
+  .topic-name { color: var(--muted); }
+
+  /* TABS */
+  .tab-bar { display: flex; gap: 4px; background: var(--surface); padding: 4px; border-radius: 10px; margin-bottom: 20px; width: fit-content; }
+  .tab-btn {
+    padding: 7px 18px; border-radius: 7px;
+    border: none; background: transparent;
+    color: var(--muted); font-size: 13px; font-weight: 500;
+    cursor: pointer; font-family: 'Inter', sans-serif;
+    transition: all 0.18s;
+  }
+  .tab-btn.active { background: var(--card); color: var(--text); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* FORMS */
+  .form-group { margin-bottom: 16px; }
+  .form-label { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 6px; }
+  .form-input, .form-select, .form-textarea {
+    width: 100%; padding: 9px 12px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text);
+    font-size: 13px; font-family: 'Inter', sans-serif;
+    transition: border-color 0.2s;
+    outline: none;
+  }
+  .form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--accent1); }
+  .form-select option { background: var(--card); }
+  .form-textarea { resize: vertical; min-height: 80px; }
+  .toggle-row { display: flex; align-items: center; gap: 10px; }
+  .toggle {
+    width: 40px; height: 22px; border-radius: 11px;
+    background: var(--border); position: relative;
+    cursor: pointer; transition: background 0.2s; flex-shrink: 0;
+    border: none; outline: none;
+  }
+  .toggle::after {
+    content: ''; position: absolute;
+    top: 3px; left: 3px;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: white; transition: transform 0.2s;
+  }
+  .toggle.on { background: var(--accent1); }
+  .toggle.on::after { transform: translateX(18px); }
+  input[type=range] {
+    width: 100%; accent-color: var(--accent1);
+    height: 4px; border-radius: 2px;
+  }
+
+  /* DROPZONE */
+  .dropzone {
+    border: 2px dashed var(--border);
+    border-radius: 12px; padding: 40px 20px;
+    text-align: center; cursor: pointer;
+    transition: all 0.2s;
+  }
+  .dropzone:hover, .dropzone.drag-over { border-color: var(--accent1); background: rgba(124,58,237,0.06); }
+  .dropzone-icon { font-size: 40px; margin-bottom: 12px; }
+  .dropzone-text { font-size: 14px; color: var(--muted); }
+
+  /* CODE BLOCK */
+  .code-block {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    color: #a78bfa; line-height: 1.6; overflow-x: auto;
+    white-space: pre;
+  }
+
+  /* FILTER BAR */
+  .filter-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+  .filter-bar .form-select, .filter-bar .form-input { width: auto; min-width: 140px; }
+  .filter-sep { width: 1px; height: 28px; background: var(--border); }
+
+  /* CHARTS */
+  .chart-container { position: relative; }
+  canvas { max-width: 100%; }
+
+  /* WATERFALL */
+  .waterfall { display: flex; flex-direction: column; gap: 6px; }
+  .wf-row { display: flex; align-items: center; gap: 10px; }
+  .wf-label { font-size: 11px; color: var(--muted); width: 120px; flex-shrink: 0; text-align: right; }
+  .wf-bar-wrap { flex: 1; background: var(--surface); border-radius: 4px; height: 22px; position: relative; }
+  .wf-bar { height: 100%; border-radius: 4px; display: flex; align-items: center; padding: 0 8px; font-size: 11px; font-weight: 600; color: white; transition: width 0.4s; }
+  .wf-bar.success { background: rgba(16,185,129,0.7); }
+  .wf-bar.error { background: rgba(239,68,68,0.7); }
+  .wf-bar.running { background: rgba(245,158,11,0.7); }
+  .wf-dur { font-size: 11px; color: var(--muted); width: 60px; flex-shrink: 0; }
+
+  /* TOAST */
+  #toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+  .toast {
+    padding: 12px 18px; border-radius: 10px;
+    font-size: 13px; font-weight: 500; max-width: 340px;
+    display: flex; align-items: center; gap: 10px;
+    animation: toastIn 0.25s ease;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+  .toast.success { background: #052e16; border: 1px solid rgba(16,185,129,0.35); color: var(--success); }
+  .toast.error { background: #1f0a0a; border: 1px solid rgba(239,68,68,0.35); color: var(--danger); }
+  .toast.info { background: #0c1633; border: 1px solid rgba(59,130,246,0.35); color: var(--info); }
+  @keyframes toastIn { from { opacity:0; transform:translateX(20px); } to { opacity:1; transform:translateX(0); } }
+
+  /* MODAL */
+  #modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.65);
+    z-index: 1000; display: none; align-items: center; justify-content: center;
+    backdrop-filter: blur(4px);
+  }
+  #modal-overlay.open { display: flex; animation: fadeIn 0.2s; }
+  .modal {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 28px;
+    width: 100%; max-width: 460px;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+  }
+  .modal-title { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+  .modal-sub { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+
+  /* APPROVAL CARD */
+  .approval-card {
+    background: var(--card2); border: 1px solid var(--border);
+    border-left: 3px solid var(--warning);
+    border-radius: 10px; padding: 16px;
+    margin-bottom: 12px;
+  }
+  .approval-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+  .approval-meta { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+  .approval-meta strong { color: var(--text); }
+
+  /* MISC */
+  .section-title { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+  .section-sub { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
+  .divider { height: 1px; background: var(--border); margin: 20px 0; }
+  .mb-4 { margin-bottom: 4px; }
+  .mb-8 { margin-bottom: 8px; }
+  .mb-16 { margin-bottom: 16px; }
+  .mb-20 { margin-bottom: 20px; }
+  .mb-24 { margin-bottom: 24px; }
+  .flex { display: flex; }
+  .flex-center { display: flex; align-items: center; }
+  .gap-8 { gap: 8px; }
+  .gap-12 { gap: 12px; }
+  .gap-16 { gap: 16px; }
+  .text-muted { color: var(--muted); }
+  .text-sm { font-size: 12px; }
+  .text-xs { font-size: 11px; }
+  .fw-600 { font-weight: 600; }
+  .fw-700 { font-weight: 700; }
+  .mono { font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+  .scroll-area { overflow-y: auto; max-height: 380px; }
+  .empty-state { text-align: center; padding: 40px 20px; color: var(--muted); font-size: 13px; }
+  .empty-icon { font-size: 40px; margin-bottom: 12px; opacity: 0.5; }
+  .quick-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .quick-action-btn {
+    padding: 16px; border-radius: 12px;
+    background: var(--card2); border: 1px solid var(--border);
+    cursor: pointer; transition: all 0.2s; text-align: center;
+    font-family: 'Inter', sans-serif;
+  }
+  .quick-action-btn:hover { border-color: var(--accent1); background: rgba(124,58,237,0.08); transform: translateY(-2px); }
+  .quick-action-icon { font-size: 28px; margin-bottom: 8px; }
+  .quick-action-label { font-size: 13px; font-weight: 600; color: var(--text); }
+  .quick-action-sub { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .scoring-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .scoring-card {
+    background: var(--card2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px;
+  }
+  .scoring-card-title { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .scoring-formula { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #a78bfa; background: var(--surface); padding: 8px; border-radius: 6px; }
+  .progress-bar { height: 4px; background: var(--border); border-radius: 2px; margin-top: 6px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 2px; background: var(--accent-grad); }
+  .json-viewer { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #a78bfa; overflow-x: auto; white-space: pre-wrap; max-height: 300px; overflow-y: auto; line-height: 1.5; }
+
+  /* LOADING SPINNER */
+  .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--accent1); border-radius: 50%; animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-center { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 40px; color: var(--muted); font-size: 13px; }
+
+  /* RESPONSIVE */
+  @media (max-width: 900px) {
+    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    .agent-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- SIDEBAR -->
+  <aside id="sidebar">
+    <div class="sidebar-logo">
+      <a class="logo-badge" href="#dashboard">
+        <div class="logo-icon">⚡</div>
+        <div>
+          <div class="logo-text">CostSense AI</div>
+          <div class="logo-sub">Cost Intelligence Platform</div>
+        </div>
+      </a>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section-label">Overview</div>
+      <a class="nav-item active" href="#dashboard" onclick="navigate('dashboard',this)">
+        <span class="nav-icon">🏠</span> Dashboard
+      </a>
+      <div class="nav-section-label" style="margin-top:10px;">Pipeline</div>
+      <a class="nav-item" href="#input" onclick="navigate('input',this)">
+        <span class="nav-icon">📥</span> Data Input
+      </a>
+      <a class="nav-item" href="#pipeline" onclick="navigate('pipeline',this)">
+        <span class="nav-icon">🔄</span> Pipeline Monitor
+      </a>
+      <div class="nav-section-label" style="margin-top:10px;">Analysis</div>
+      <a class="nav-item" href="#anomalies" onclick="navigate('anomalies',this)">
+        <span class="nav-icon">🚨</span> Anomalies
+        <span class="nav-badge danger" id="pending-badge" style="display:none">0</span>
+      </a>
+      <a class="nav-item" href="#summary" onclick="navigate('summary',this)">
+        <span class="nav-icon">📊</span> CFO Summary
+      </a>
+      <a class="nav-item" href="#logs" onclick="navigate('logs',this)">
+        <span class="nav-icon">📋</span> Process Logs
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="status-dot-row">
+        <div class="sdot" id="api-dot"></div>
+        <span id="api-status-text">Checking API...</span>
+      </div>
+      <div style="color:var(--muted2);font-size:10px;margin-top:2px;">API: localhost:8000</div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div id="main">
+    <!-- TOPBAR -->
+    <header id="topbar">
+      <div>
+        <span class="topbar-title" id="topbar-title">Dashboard</span>
+        <span class="topbar-sub" id="topbar-sub">Autonomous cost intelligence overview</span>
+      </div>
+      <div class="topbar-right">
+        <div class="api-status-pill" onclick="checkHealth()">
+          <div class="sdot" id="topbar-dot"></div>
+          <span id="topbar-api-label">API Status</span>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="navigate('input')">
+          ➕ Run Pipeline
+        </button>
+      </div>
+    </header>
+
+    <!-- CONTENT -->
+    <div id="content">
+      <!-- PAGE: DASHBOARD -->
+      <div id="page-dashboard" class="page active">
+        <div class="section-title">Welcome to CostSense AI</div>
+        <div class="section-sub">9-agent autonomous cost intelligence — detect, score, and resolve enterprise spend anomalies</div>
+        <div class="metric-grid" id="dash-metrics">
+          <div class="metric-card">
+            <div class="metric-icon purple">⚡</div>
+            <div class="metric-value" id="d-events">—</div>
+            <div class="metric-label">Events Processed</div>
+          </div>
+          <div class="metric-card warning">
+            <div class="metric-icon warning">🚨</div>
+            <div class="metric-value" id="d-anomalies">—</div>
+            <div class="metric-label">Anomalies Detected</div>
+          </div>
+          <div class="metric-card danger">
+            <div class="metric-icon danger">💰</div>
+            <div class="metric-value" id="d-exposure">—</div>
+            <div class="metric-label">Total Exposure (₹)</div>
+          </div>
+          <div class="metric-card success">
+            <div class="metric-icon success">✅</div>
+            <div class="metric-value" id="d-recovery">—</div>
+            <div class="metric-label">Recovery Rate</div>
+          </div>
+        </div>
+        <div class="section-title" style="font-size:14px;margin-bottom:12px;">Quick Actions</div>
+        <div class="quick-actions mb-24">
+          <button class="quick-action-btn" onclick="navigate('input')">
+            <div class="quick-action-icon">📥</div>
+            <div class="quick-action-label">Load Data</div>
+            <div class="quick-action-sub">Synthetic or CSV upload</div>
+          </button>
+          <button class="quick-action-btn" onclick="navigate('pipeline')">
+            <div class="quick-action-icon">🔄</div>
+            <div class="quick-action-label">Monitor Pipeline</div>
+            <div class="quick-action-sub">Live 9-agent view</div>
+          </button>
+          <button class="quick-action-btn" onclick="navigate('anomalies')">
+            <div class="quick-action-icon">🚨</div>
+            <div class="quick-action-label">Review Anomalies</div>
+            <div class="quick-action-sub">Approve or auto-resolve</div>
+          </button>
+          <button class="quick-action-btn" onclick="navigate('summary')">
+            <div class="quick-action-icon">📊</div>
+            <div class="quick-action-label">CFO Summary</div>
+            <div class="quick-action-sub">Executive view & metrics</div>
+          </button>
+        </div>
+        <div class="grid-2 mb-24">
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">System Architecture</div>
+                <div class="card-sub">9-Agent Choreography Pipeline</div>
+              </div>
+            </div>
+            <div class="code-block">POST /ingest/*
+  └─► Agent 01 (data_connector)     raw.spend
+        └─► Agent 02 (normalization) normalized.spend
+              └─► Agent 03 (anomaly_detection) anomaly.detected
+                      ├─► Agent 04 (root_cause)    [LLM] anomaly.enriched
+                      └─► Agent 05 (prioritization) [&lt;1ms] anomaly.scored
+                                  ╲                ╱
+                             Agent 06 (merge)      anomaly.ready
+                                  └─► Agent 07 (action_dispatcher)
+                                          ├─► action.approval_needed
+                                          └─► action.auto_execute
+                                                └─► Agent 08 (executor)
+
+Agent 09 (audit_trail) ── listens ALL 8 topics</div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Scoring Model</div>
+            </div>
+            <div class="scoring-cards" style="margin-bottom:0;">
+              <div class="scoring-card">
+                <div class="scoring-card-title">Anomaly Score (AS)</div>
+                <div class="scoring-formula">AS = (FI×0.40) + (FR×0.25)
+   + (RE×0.20) + (SR×0.15)
+Range: 1–10</div>
+              </div>
+              <div class="scoring-card">
+                <div class="scoring-card-title">Action Priority (APS)</div>
+                <div class="scoring-formula">APS = AS × confidence
+         / complexity
+Range: 0–10</div>
+              </div>
+              <div class="scoring-card">
+                <div class="scoring-card-title">Approval Routing</div>
+                <div class="scoring-formula">APS ≥ 4.0
+AND complexity ≥ 2
+→ approval_needed</div>
+              </div>
+              <div class="scoring-card">
+                <div class="scoring-card-title">Complexity Tiers</div>
+                <div class="scoring-formula">&lt;₹50K    → 1 (auto)
+₹50K–₹2L → 2 (Slack)
+₹2L–₹10L → 3 (Finance)
+&gt;₹10L   → 5 (Board)</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Injected Anomaly Types</div>
+            <div class="card-sub">5 anomaly patterns seeded into synthetic data</div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Type</th><th>Vendor</th><th>Detection Method</th><th>Recoverability</th><th>Reversible</th></tr></thead>
+              <tbody>
+                <tr><td><span class="badge badge-danger">duplicate_payment</span></td><td>AWS</td><td>SHA256 dedup + IForest</td><td>10 / 10</td><td><span class="badge badge-success">Fully</span></td></tr>
+                <tr><td><span class="badge badge-warning">cloud_waste</span></td><td>GCP</td><td>Right-size rule</td><td>9 / 10</td><td><span class="badge badge-success">Mostly</span></td></tr>
+                <tr><td><span class="badge badge-purple">unused_saas</span></td><td>Slack</td><td>Usage pattern rule</td><td>8.5 / 10</td><td><span class="badge badge-success">Mostly</span></td></tr>
+                <tr><td><span class="badge badge-info">vendor_rate_anomaly</span></td><td>Infosys</td><td>Z-score &gt; 2.5</td><td>7 / 10</td><td><span class="badge badge-warning">Partial</span></td></tr>
+                <tr><td><span class="badge badge-cyan">sla_penalty_risk</span></td><td>Tata</td><td>SLA rule</td><td>4 / 10</td><td><span class="badge badge-danger">Limited</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- PAGE: INPUT -->
+      <div id="page-input" class="page">
+        <div class="section-title">Data Input</div>
+        <div class="section-sub">Load synthetic data or upload a custom CSV to run the 9-agent pipeline</div>
+        <div class="tab-bar">
+          <button class="tab-btn active" onclick="switchTab('input','synthetic',this)">🧪 Synthetic Data</button>
+          <button class="tab-btn" onclick="switchTab('input','csv',this)">📁 Custom CSV</button>
+        </div>
+        <div id="input-tab-synthetic" class="tab-panel active">
+          <div class="grid-2 mb-20">
+            <div class="card">
+              <div class="card-title mb-16">Configuration</div>
+              <div class="form-group">
+                <label class="form-label">Number of Records: <strong id="rec-count-label">86</strong></label>
+                <input type="range" id="rec-count" min="20" max="500" value="86" oninput="document.getElementById('rec-count-label').textContent=this.value"/>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Random Seed</label>
+                <input type="number" id="syn-seed" class="form-input" value="42" min="1"/>
+              </div>
+              <div class="form-group">
+                <div class="toggle-row">
+                  <button class="toggle on" id="anomaly-toggle" onclick="toggleBtn(this)"></button>
+                  <label class="form-label" style="margin:0;">Include Injected Anomalies</label>
+                </div>
+              </div>
+              <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <button class="btn btn-secondary" onclick="previewSyntheticData()">👁 Preview Data</button>
+                <a id="download-csv-link" class="btn btn-secondary" href="#" style="display:none">⬇ Download CSV</a>
+                <button class="btn btn-primary" onclick="runSyntheticPipeline()" id="run-syn-btn">▶ Run Pipeline</button>
+              </div>
+              <div id="pipeline-result-syn" style="margin-top:14px;display:none;">
+                <div class="badge badge-success" style="font-size:13px;padding:6px 14px;">
+                  ✅ Pipeline started! Process ID: <span id="syn-process-id" class="mono"></span>
+                </div>
+                <div style="margin-top:8px;">
+                  <button class="btn btn-secondary btn-sm" onclick="navigate('pipeline')">→ Monitor Pipeline</button>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-title mb-16">About Synthetic Data</div>
+              <div style="font-size:13px;color:var(--muted);line-height:1.8;">
+                <p class="mb-8">• <strong style="color:var(--text);">15 vendors</strong> across 6 spend categories</p>
+                <p class="mb-8">• Categories: Cloud Infra, SaaS, Professional Services, Telecom, Office & Facilities, Hardware</p>
+                <p class="mb-8">• <strong style="color:var(--text);">5 anomaly types</strong> injected with configurable seed</p>
+                <p class="mb-8">• Amounts in INR with realistic distributions</p>
+                <p class="mb-8">• Duplicate payments seeded ×2 for AWS</p>
+                <p>• IForest contamination: <strong style="color:var(--text);">8%</strong>, retrains every 20 records</p>
+              </div>
+            </div>
+          </div>
+          <div id="preview-section" style="display:none;">
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <div class="card-title">Data Preview</div>
+                  <div class="card-sub" id="preview-count">Loading...</div>
+                </div>
+              </div>
+              <div id="preview-loading" class="loading-center"><div class="spinner"></div> Loading preview...</div>
+              <div class="table-wrap scroll-area" id="preview-table-wrap" style="display:none;"></div>
+            </div>
+          </div>
+        </div>
+        <div id="input-tab-csv" class="tab-panel">
+          <div class="grid-2 mb-20">
+            <div class="card">
+              <div class="card-title mb-16">Upload CSV</div>
+              <div class="dropzone" id="dropzone" onclick="document.getElementById('csv-file').click()" ondragover="handleDragOver(event)" ondrop="handleDrop(event)" ondragleave="this.classList.remove('drag-over')">
+                <div class="dropzone-icon">📁</div>
+                <div class="dropzone-text">Drag & drop CSV here or click to browse</div>
+                <div style="font-size:11px;color:var(--muted2);margin-top:6px;">Supports: vendor, amount, currency, department, category, transaction_date</div>
+              </div>
+              <input type="file" id="csv-file" accept=".csv" style="display:none" onchange="handleCSVFile(event)"/>
+              <div id="csv-file-info" style="display:none;margin-top:12px;">
+                <div class="badge badge-success" id="csv-file-name" style="font-size:12px;padding:5px 12px;"></div>
+              </div>
+              <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">
+                <button class="btn btn-primary" onclick="runCSVPipeline()" id="run-csv-btn" disabled>▶ Run Pipeline</button>
+              </div>
+              <div id="pipeline-result-csv" style="margin-top:14px;display:none;">
+                <div class="badge badge-success" style="font-size:13px;padding:6px 14px;">
+                  ✅ Pipeline started! Process ID: <span id="csv-process-id" class="mono"></span>
+                </div>
+                <div style="margin-top:8px;">
+                  <button class="btn btn-secondary btn-sm" onclick="navigate('pipeline')">→ Monitor Pipeline</button>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-title mb-16">Required CSV Columns</div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Column</th><th>Type</th><th>Example</th></tr></thead>
+                  <tbody>
+                    <tr><td class="mono">vendor</td><td>string</td><td>AWS</td></tr>
+                    <tr><td class="mono">amount</td><td>number</td><td>150000</td></tr>
+                    <tr><td class="mono">currency</td><td>string</td><td>INR</td></tr>
+                    <tr><td class="mono">department</td><td>string</td><td>Engineering</td></tr>
+                    <tr><td class="mono">category</td><td>string</td><td>Cloud Infra</td></tr>
+                    <tr><td class="mono">transaction_date</td><td>date</td><td>2026-01-15</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          <div id="csv-preview-section" style="display:none;">
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <div class="card-title">CSV Preview</div>
+                  <div class="card-sub" id="csv-preview-count"></div>
+                </div>
+              </div>
+              <div class="table-wrap scroll-area" id="csv-preview-table"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PAGE: PIPELINE -->
+      <div id="page-pipeline" class="page">
+        <div class="flex-center gap-16 mb-20" style="flex-wrap:wrap;">
+          <div>
+            <div class="section-title">Pipeline Monitor</div>
+            <div class="section-sub" style="margin-bottom:0;">Live 9-agent orchestration view</div>
+          </div>
+          <div style="margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <select class="form-select" id="pipeline-process-sel" onchange="loadPipelineForProcess()" style="min-width:200px;">
+              <option value="">All processes</option>
+            </select>
+            <div class="toggle-row">
+              <button class="toggle on" id="auto-refresh-toggle" onclick="toggleAutoRefresh(this)"></button>
+              <span style="font-size:12px;color:var(--muted);">Auto-refresh (5s)</span>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="refreshPipeline()">🔄 Refresh</button>
+          </div>
+        </div>
+        <div class="metric-grid mb-20" id="pipeline-metrics">
+          <div class="metric-card">
+            <div class="metric-icon purple">📝</div>
+            <div class="metric-value" id="pl-steps">—</div>
+            <div class="metric-label">Pipeline Steps</div>
+          </div>
+          <div class="metric-card success">
+            <div class="metric-icon success">✅</div>
+            <div class="metric-value" id="pl-success">—</div>
+            <div class="metric-label">Successful</div>
+          </div>
+          <div class="metric-card danger">
+            <div class="metric-icon danger">❌</div>
+            <div class="metric-value" id="pl-errors">—</div>
+            <div class="metric-label">Errors</div>
+          </div>
+          <div class="metric-card info">
+            <div class="metric-icon info">⏱</div>
+            <div class="metric-value" id="pl-duration">—</div>
+            <div class="metric-label">Avg Duration (ms)</div>
+          </div>
+        </div>
+        <div class="card mb-20">
+          <div class="card-header">
+            <div class="card-title">9-Agent Activity Grid</div>
+          </div>
+          <div class="agent-grid" id="agent-grid">
+          </div>
+        </div>
+        <div class="card mb-20">
+          <div class="card-header">
+            <div class="card-title">Event Bus Topics</div>
+          </div>
+          <div class="topics-row" id="topics-row">
+            <div class="loading-center"><div class="spinner"></div></div>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Event Bus Feed</div>
+              <span class="badge badge-muted" id="events-count">0 events</span>
+            </div>
+            <div class="table-wrap scroll-area">
+              <table>
+                <thead><tr><th>Time</th><th>Topic</th><th>Agent</th><th>Process</th></tr></thead>
+                <tbody id="events-table-body">
+                  <tr><td colspan="4" class="empty-state">No events yet</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Execution Log</div>
+              <span class="badge badge-muted" id="exec-log-count">0 entries</span>
+            </div>
+            <div class="table-wrap scroll-area">
+              <table>
+                <thead><tr><th>Agent</th><th>Status</th><th>Duration</th><th>Process</th></tr></thead>
+                <tbody id="exec-log-body">
+                  <tr><td colspan="4" class="empty-state">No logs yet</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PAGE: ANOMALIES -->
+      <div id="page-anomalies" class="page">
+        <div class="section-title">Anomaly Dashboard</div>
+        <div class="section-sub">Detected spend anomalies with AI-scored priority and approval routing</div>
+        <div class="filter-bar">
+          <select class="form-select" id="anom-status-filter" onchange="loadAnomalies()">
+            <option value="">All Statuses</option>
+            <option value="pending">Pending</option>
+            <option value="approved">Approved</option>
+            <option value="auto_resolved">Auto Resolved</option>
+            <option value="rejected">Rejected</option>
+          </select>
+          <select class="form-select" id="anom-type-filter" onchange="loadAnomalies()">
+            <option value="">All Types</option>
+            <option value="duplicate_payment">Duplicate Payment</option>
+            <option value="cloud_waste">Cloud Waste</option>
+            <option value="unused_saas">Unused SaaS</option>
+            <option value="vendor_rate_anomaly">Vendor Rate Anomaly</option>
+            <option value="sla_penalty_risk">SLA Penalty Risk</option>
+          </select>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <label class="form-label" style="margin:0;white-space:nowrap;">Min APS:</label>
+            <input type="number" id="anom-aps-filter" class="form-input" placeholder="0" min="0" max="10" step="0.1" style="width:80px;" oninput="loadAnomalies()"/>
+          </div>
+          <div class="filter-sep"></div>
+          <button class="btn btn-secondary btn-sm" onclick="loadAnomalies()">🔄 Refresh</button>
+        </div>
+        <div class="metric-grid mb-20" id="anom-metrics">
+          <div class="metric-card danger">
+            <div class="metric-icon danger">🚨</div>
+            <div class="metric-value" id="am-total">—</div>
+            <div class="metric-label">Total Anomalies</div>
+          </div>
+          <div class="metric-card warning">
+            <div class="metric-icon warning">⏳</div>
+            <div class="metric-value" id="am-pending">—</div>
+            <div class="metric-label">Pending Approval</div>
+          </div>
+          <div class="metric-card success">
+            <div class="metric-icon success">✅</div>
+            <div class="metric-value" id="am-resolved">—</div>
+            <div class="metric-label">Resolved</div>
+          </div>
+          <div class="metric-card info">
+            <div class="metric-icon info">💰</div>
+            <div class="metric-value" id="am-exposure">—</div>
+            <div class="metric-label">Total Exposure (₹)</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-icon purple">📈</div>
+            <div class="metric-value" id="am-avg-aps">—</div>
+            <div class="metric-label">Avg APS Score</div>
+          </div>
+        </div>
+        <div class="grid-3 mb-20">
+          <div class="card">
+            <div class="card-title mb-16">Anomalies by Type</div>
+            <div class="chart-container" style="height:220px;"><canvas id="chart-anom-type"></canvas></div>
+          </div>
+          <div class="card">
+            <div class="card-title mb-16">Exposure by Type (₹)</div>
+            <div class="chart-container" style="height:220px;"><canvas id="chart-anom-exposure"></canvas></div>
+          </div>
+          <div class="card">
+            <div class="card-title mb-16">APS Distribution</div>
+            <div class="chart-container" style="height:220px;"><canvas id="chart-aps-dist"></canvas></div>
+          </div>
+        </div>
+        <div class="card mb-20">
+          <div class="card-header">
+            <div class="card-title">Anomaly Records</div>
+            <span class="badge badge-muted" id="anom-table-count">—</span>
+          </div>
+          <div id="anom-table-loading" class="loading-center"><div class="spinner"></div> Loading...</div>
+          <div class="table-wrap" id="anom-table-wrap" style="display:none;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Type</th><th>Vendor</th><th>Amount (₹)</th><th>Department</th>
+                  <th>AS</th><th>APS</th><th>Confidence</th><th>Complexity</th><th>Status</th><th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="anom-table-body"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card" id="approval-gate-section" style="display:none;">
+          <div class="card-header">
+            <div>
+              <div class="card-title">⚠ Approval Gate</div>
+              <div class="card-sub">These anomalies require manual approval (APS ≥ 4.0 AND complexity ≥ 2)</div>
+            </div>
+            <span class="badge badge-danger" id="approval-count">0 pending</span>
+          </div>
+          <div id="approval-list"></div>
+        </div>
+      </div>
+
+      <!-- PAGE: SUMMARY -->
+      <div id="page-summary" class="page">
+        <div class="flex-center gap-16 mb-20" style="flex-wrap:wrap;">
+          <div>
+            <div class="section-title">CFO Summary</div>
+            <div class="section-sub" style="margin-bottom:0;">Executive financial intelligence overview</div>
+          </div>
+          <div style="margin-left:auto;display:flex;align-items:center;gap:10px;">
+            <select class="form-select" id="summary-process-sel" onchange="loadSummary()" style="min-width:200px;">
+              <option value="">All runs (aggregate)</option>
+            </select>
+            <button class="btn btn-secondary btn-sm" onclick="loadSummary()">🔄 Refresh</button>
+          </div>
+        </div>
+        <div class="metric-grid mb-20">
+          <div class="metric-card danger">
+            <div class="metric-icon danger">⚠</div>
+            <div class="metric-value" id="s-exposure">—</div>
+            <div class="metric-label">Total Exposure (₹)</div>
+          </div>
+          <div class="metric-card success">
+            <div class="metric-icon success">💹</div>
+            <div class="metric-value" id="s-recovered">—</div>
+            <div class="metric-label">Recovered (₹)</div>
+          </div>
+          <div class="metric-card warning">
+            <div class="metric-icon warning">⏳</div>
+            <div class="metric-value" id="s-pending">—</div>
+            <div class="metric-label">Pending (₹)</div>
+          </div>
+          <div class="metric-card info">
+            <div class="metric-icon info">📈</div>
+            <div class="metric-value" id="s-rate">—</div>
+            <div class="metric-label">Recovery Rate</div>
+          </div>
+        </div>
+        <div class="grid-2 mb-20">
+          <div class="card">
+            <div class="card-title mb-16">Anomaly Breakdown</div>
+            <div class="chart-container" style="height:240px;"><canvas id="chart-summary-breakdown"></canvas></div>
+          </div>
+          <div class="card">
+            <div class="card-title mb-16">Status Distribution</div>
+            <div class="chart-container" style="height:240px;"><canvas id="chart-summary-status"></canvas></div>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-title mb-16">Agent Health</div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Agent</th><th>Events</th><th>Errors</th><th>Avg Duration</th><th>Status</th></tr></thead>
+                <tbody id="agent-health-table"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card" id="top-anomaly-card" style="display:none;">
+            <div class="card-title mb-16">⭐ Top Priority Anomaly</div>
+            <div id="top-anomaly-content"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PAGE: LOGS -->
+      <div id="page-logs" class="page">
+        <div class="flex-center gap-16 mb-20" style="flex-wrap:wrap;">
+          <div>
+            <div class="section-title">Process Logs</div>
+            <div class="section-sub" style="margin-bottom:0;">Full pipeline trace per ingestion run</div>
+          </div>
+          <div style="margin-left:auto;display:flex;align-items:center;gap:10px;">
+            <select class="form-select" id="logs-process-sel" onchange="loadProcessLogs()" style="min-width:200px;">
+              <option value="">Select a process...</option>
+            </select>
+            <button class="btn btn-secondary btn-sm" onclick="loadProcessLogs()">🔄 Refresh</button>
+          </div>
+        </div>
+        <div class="metric-grid mb-20">
+          <div class="metric-card">
+            <div class="metric-icon purple">📝</div>
+            <div class="metric-value" id="lg-steps">—</div>
+            <div class="metric-label">Total Steps</div>
+          </div>
+          <div class="metric-card danger">
+            <div class="metric-icon danger">❌</div>
+            <div class="metric-value" id="lg-errors">—</div>
+            <div class="metric-label">Errors</div>
+          </div>
+          <div class="metric-card info">
+            <div class="metric-icon info">🤖</div>
+            <div class="metric-value" id="lg-agents">—</div>
+            <div class="metric-label">Agents Involved</div>
+          </div>
+          <div class="metric-card success">
+            <div class="metric-icon success">⏱</div>
+            <div class="metric-value" id="lg-total-ms">—</div>
+            <div class="metric-label">Total Time (ms)</div>
+          </div>
+        </div>
+        <div class="card mb-20" id="waterfall-card" style="display:none;">
+          <div class="card-title mb-16">Execution Waterfall</div>
+          <div class="waterfall" id="waterfall-viz"></div>
+        </div>
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Step Table</div>
+              <span class="badge badge-muted" id="log-step-count">—</span>
+            </div>
+            <div id="log-table-loading" class="loading-center" style="display:none;"><div class="spinner"></div> Loading...</div>
+            <div class="table-wrap scroll-area" id="log-table-wrap">
+              <table>
+                <thead><tr><th>#</th><th>Agent</th><th>Topic In</th><th>Status</th><th>Duration</th></tr></thead>
+                <tbody id="log-table-body">
+                  <tr><td colspan="5" class="empty-state">Select a process to view logs</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Payload Inspector</div>
+              <span class="badge badge-muted" id="selected-step-label">Click a row</span>
+            </div>
+            <div id="payload-inspector">
+              <div class="empty-state"><div class="empty-icon">🔍</div>Select a log row to inspect input/output payload</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div id="modal-overlay">
+  <div class="modal">
+    <div class="modal-title" id="modal-title">Approve Anomaly</div>
+    <div class="modal-sub" id="modal-sub">Review and approve the recommended action for this anomaly.</div>
+    <div class="form-group">
+      <label class="form-label">Approved By *</label>
+      <input type="text" id="modal-approved-by" class="form-input" placeholder="Your name or role (e.g. CFO)"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Notes</label>
+      <textarea id="modal-notes" class="form-textarea" placeholder="Optional: Add context or conditions..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-success" onclick="submitApproval()" id="modal-submit-btn">✅ Approve</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast-container"></div>
+
+<script>
+// ===== CONSTANTS =====
+const API = 'http://localhost:8000';
+const AGENT_NAMES = [
+  {num:'01',name:'Data Connector',role:'Validate & publish raw.spend'},
+  {num:'02',name:'Normalization',role:'Category map, INR currency, SHA256 dedup'},
+  {num:'03',name:'Anomaly Detection',role:'IForest + 5 custom rules'},
+  {num:'04',name:'Root Cause Analysis',role:'LangChain → Gemini 2.5 Flash'},
+  {num:'05',name:'Prioritization',role:'AS/APS scoring engine'},
+  {num:'06',name:'Merge',role:'asyncio.Lock dual buffer, 30s TTL'},
+  {num:'07',name:'Action Dispatcher',role:'Route approval vs. auto-execute'},
+  {num:'08',name:'Workflow Executor',role:'Recovery execution & simulation'},
+  {num:'09',name:'Audit Trail',role:'Append-only audit log, all topics'},
+];
+const TOPICS = [
+  'raw.spend','normalized.spend','anomaly.detected',
+  'anomaly.enriched','anomaly.scored','anomaly.ready',
+  'action.approval_needed','action.auto_execute'
+];
+const TYPE_COLORS = {
+  duplicate_payment: '#ef4444',
+  cloud_waste: '#f59e0b',
+  unused_saas: '#8b5cf6',
+  vendor_rate_anomaly: '#3b82f6',
+  sla_penalty_risk: '#06b6d4',
+};
+const TYPE_BADGE = {
+  duplicate_payment: 'badge-danger',
+  cloud_waste: 'badge-warning',
+  unused_saas: 'badge-purple',
+  vendor_rate_anomaly: 'badge-info',
+  sla_penalty_risk: 'badge-cyan',
+};
+const STATUS_BADGE = {
+  pending: 'badge-warning',
+  approved: 'badge-success',
+  auto_resolved: 'badge-success',
+  rejected: 'badge-danger',
+  pending_approval: 'badge-warning',
+};
+
+// ===== STATE =====
+let charts = {};
+let autoRefreshInterval = null;
+let currentApprovalId = null;
+let parsedCSVData = [];
+let currentPage = 'dashboard';
+
+// ===== ROUTING =====
+function navigate(page, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const pg = document.getElementById('page-' + page);
+  if (pg) pg.classList.add('active');
+  if (el) el.classList.add('active');
+  else {
+    const link = document.querySelector(`.nav-item[href="#${page}"]`);
+    if (link) link.classList.add('active');
+  }
+  const titles = {
+    dashboard: ['Dashboard','Autonomous cost intelligence overview'],
+    input: ['Data Input','Load synthetic or CSV data to run pipeline'],
+    pipeline: ['Pipeline Monitor','Live 9-agent orchestration view'],
+    anomalies: ['Anomaly Dashboard','AI-scored spend anomaly intelligence'],
+    summary: ['CFO Summary','Executive financial intelligence overview'],
+    logs: ['Process Logs','Full pipeline trace per ingestion run'],
+  };
+  if (titles[page]) {
+    document.getElementById('topbar-title').textContent = titles[page][0];
+    document.getElementById('topbar-sub').textContent = titles[page][1];
+  }
+  currentPage = page;
+  window.location.hash = page;
+  if (page === 'dashboard') loadDashboard();
+  if (page === 'pipeline') { loadPipelineProcesses(); refreshPipeline(); }
+  if (page === 'anomalies') loadAnomalies();
+  if (page === 'summary') { loadSummaryProcesses(); loadSummary(); }
+  if (page === 'logs') loadLogProcesses();
+}
+
+// ===== API HELPERS =====
+async function apiFetch(path, opts={}) {
+  const res = await fetch(API + path, {
+    signal: AbortSignal.timeout(30000),
+    headers: {'Content-Type': 'application/json'},
+    ...opts
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+  return res.json();
+}
+
+// ===== HEALTH =====
+async function checkHealth() {
+  const dot1 = document.getElementById('api-dot');
+  const dot2 = document.getElementById('topbar-dot');
+  const label = document.getElementById('api-status-text');
+  const topLabel = document.getElementById('topbar-api-label');
+  try {
+    const d = await apiFetch('/health');
+    dot1.className = 'sdot online';
+    dot2.className = 'sdot online';
+    label.textContent = 'API Online';
+    topLabel.textContent = `API Online · v${d.version||'1.0'}`;
+    document.getElementById('d-events').textContent = (d.events_processed||0).toLocaleString('en-IN');
+  } catch(e) {
+    dot1.className = 'sdot offline';
+    dot2.className = 'sdot offline';
+    label.textContent = 'API Offline';
+    topLabel.textContent = 'API Offline';
+  }
+}
+
+// ===== TOAST =====
+function toast(msg, type='info') {
+  const c = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  const icons = {success:'✅', error:'❌', info:'ℹ'};
+  t.className = `toast ${type}`;
+  t.innerHTML = `<span>${icons[type]||'•'}</span><span>${msg}</span>`;
+  c.appendChild(t);
+  setTimeout(() => t.remove(), 4000);
+}
+
+// ===== FORMAT HELPERS =====
+function fmtINR(v) {
+  const n = parseFloat(v) || 0;
+  return '₹' + n.toLocaleString('en-IN', {maximumFractionDigits:0});
+}
+function fmtINRShort(v) {
+  const n = parseFloat(v) || 0;
+  if (n >= 10000000) return '₹' + (n/10000000).toFixed(1) + 'Cr';
+  if (n >= 100000) return '₹' + (n/100000).toFixed(1) + 'L';
+  if (n >= 1000) return '₹' + (n/1000).toFixed(0) + 'K';
+  return fmtINR(n);
+}
+function fmtPct(v) { return (parseFloat(v)||0).toFixed(1) + '%'; }
+function fmtNum(v) { return (parseFloat(v)||0).toFixed(2); }
+function fmtDate(v) { if(!v) return '—'; return new Date(v).toLocaleString('en-IN',{dateStyle:'short',timeStyle:'short'}); }
+function shortProcess(id) { return id ? id.split('-')[0] : '—'; }
+function agentShortName(name) {
+  return (name||'').replace('agent_','').replace(/^\d+_/,'').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+}
+function destroyChart(id) { if(charts[id]) { charts[id].destroy(); delete charts[id]; } }
+
+function typeBadge(type) {
+  const cls = TYPE_BADGE[type] || 'badge-muted';
+  const label = (type||'').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+function statusBadge(s) {
+  const cls = STATUS_BADGE[s] || 'badge-muted';
+  const label = (s||'—').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+
+// ===== TOGGLE =====
+function toggleBtn(el) { el.classList.toggle('on'); }
+
+// ===== TABS =====
+function switchTab(page, tab, btn) {
+  const prefix = `${page}-tab-`;
+  document.querySelectorAll(`[id^="${prefix}"]`).forEach(p => p.classList.remove('active'));
+  document.getElementById(prefix + tab).classList.add('active');
+  btn.closest('.tab-bar').querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+// ===== MODAL =====
+function openApprovalModal(id, vendor, amount, type) {
+  currentApprovalId = id;
+  document.getElementById('modal-title').textContent = 'Approve Anomaly';
+  document.getElementById('modal-sub').innerHTML = `
+    <strong>${vendor}</strong> · ${fmtINR(amount)} · ${typeBadge(type)}<br/>
+    <span style="color:var(--muted);font-size:12px;">Anomaly ID: ${id}</span>
+  `;
+  document.getElementById('modal-approved-by').value = '';
+  document.getElementById('modal-notes').value = '';
+  document.getElementById('modal-overlay').classList.add('open');
+}
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+  currentApprovalId = null;
+}
+async function submitApproval() {
+  const approvedBy = document.getElementById('modal-approved-by').value.trim();
+  if (!approvedBy) { toast('Please enter who is approving', 'error'); return; }
+  const btn = document.getElementById('modal-submit-btn');
+  btn.textContent = '⏳ Approving...'; btn.disabled = true;
+  try {
+    await apiFetch(`/anomalies/${currentApprovalId}/approve`, {
+      method: 'POST',
+      body: JSON.stringify({ approved_by: approvedBy, notes: document.getElementById('modal-notes').value })
+    });
+    toast('Anomaly approved successfully!', 'success');
+    closeModal();
+    loadAnomalies();
+    checkPendingApprovals();
+  } catch(e) {
+    toast('Approval failed: ' + e.message, 'error');
+  } finally {
+    btn.textContent = '✅ Approve'; btn.disabled = false;
+  }
+}
+
+// ===== DASHBOARD =====
+async function loadDashboard() {
+  await checkHealth();
+  try {
+    const data = await apiFetch('/summary');
+    document.getElementById('d-anomalies').textContent = data.anomalies_detected || 0;
+    document.getElementById('d-exposure').textContent = fmtINRShort(data.total_exposure_inr);
+    document.getElementById('d-recovery').textContent = fmtPct(data.recovery_rate_pct);
+  } catch(e) {}
+  checkPendingApprovals();
+}
+
+async function checkPendingApprovals() {
+  try {
+    const d = await apiFetch('/anomalies/pending-approval');
+    const count = (d.anomalies||[]).length;
+    const badge = document.getElementById('pending-badge');
+    badge.textContent = count;
+    badge.style.display = count > 0 ? '' : 'none';
+  } catch(e) {}
+}
+
+// ===== INPUT / SYNTHETIC =====
+async function previewSyntheticData() {
+  const n = document.getElementById('rec-count').value;
+  const seed = document.getElementById('syn-seed').value;
+  const includeAnomalies = document.getElementById('anomaly-toggle').classList.contains('on');
+  document.getElementById('preview-section').style.display = '';
+  document.getElementById('preview-loading').style.display = 'flex';
+  document.getElementById('preview-table-wrap').style.display = 'none';
+  const dlLink = document.getElementById('download-csv-link');
+  dlLink.href = `${API}/synthetic/download?n=${n}&seed=${seed}&include_anomalies=${includeAnomalies}`;
+  dlLink.style.display = '';
+  try {
+    const data = await apiFetch(`/synthetic/data?n=${n}&seed=${seed}&include_anomalies=${includeAnomalies}`);
+    const records = data.records || [];
+    document.getElementById('preview-count').textContent = `${records.length} records`;
+    const sample = records.slice(0, 20);
+    if (sample.length === 0) { document.getElementById('preview-table-wrap').innerHTML = '<div class="empty-state">No records</div>'; }
+    else {
+      const cols = Object.keys(sample[0]);
+      let html = '<table><thead><tr>' + cols.map(c=>`<th>${c}</th>`).join('') + '</tr></thead><tbody>';
+      sample.forEach(r => {
+        html += '<tr>' + cols.map(c => {
+          let v = r[c];
+          if (typeof v === 'number' && c.includes('amount')) v = fmtINR(v);
+          return `<td>${v !== null && v !== undefined ? v : '—'}</td>`;
+        }).join('') + '</tr>';
+      });
+      html += '</tbody></table>';
+      if (records.length > 20) html += `<div style="padding:8px 12px;font-size:11px;color:var(--muted);">Showing 20 of ${records.length} records</div>`;
+      document.getElementById('preview-table-wrap').innerHTML = html;
+    }
+    document.getElementById('preview-loading').style.display = 'none';
+    document.getElementById('preview-table-wrap').style.display = '';
+  } catch(e) {
+    document.getElementById('preview-loading').innerHTML = `<span style="color:var(--danger)">Failed to load: ${e.message}</span>`;
+  }
+}
+
+async function runSyntheticPipeline() {
+  const n = parseInt(document.getElementById('rec-count').value);
+  const seed = parseInt(document.getElementById('syn-seed').value);
+  const includeAnomalies = document.getElementById('anomaly-toggle').classList.contains('on');
+  const btn = document.getElementById('run-syn-btn');
+  btn.textContent = '⏳ Starting...'; btn.disabled = true;
+  try {
+    const data = await apiFetch('/ingest/demo', {
+      method: 'POST',
+      body: JSON.stringify({ n, seed, include_anomalies: includeAnomalies })
+    });
+    document.getElementById('syn-process-id').textContent = data.process_id || '—';
+    document.getElementById('pipeline-result-syn').style.display = '';
+    toast('Pipeline started! Process ID: ' + (data.process_id||'').split('-')[0], 'success');
+    checkPendingApprovals();
+  } catch(e) {
+    toast('Failed to start pipeline: ' + e.message, 'error');
+  } finally {
+    btn.textContent = '▶ Run Pipeline'; btn.disabled = false;
+  }
+}
+
+// ===== CSV UPLOAD =====
+function handleDragOver(e) { e.preventDefault(); document.getElementById('dropzone').classList.add('drag-over'); }
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('dropzone').classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) processCSVFile(file);
+}
+function handleCSVFile(e) { const file = e.target.files[0]; if (file) processCSVFile(file); }
+
+function processCSVFile(file) {
+  document.getElementById('csv-file-name').textContent = '📄 ' + file.name;
+  document.getElementById('csv-file-info').style.display = '';
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const text = e.target.result;
+    parsedCSVData = parseCSV(text);
+    renderCSVPreview(parsedCSVData);
+    document.getElementById('run-csv-btn').disabled = parsedCSVData.length === 0;
+  };
+  reader.readAsText(file);
+}
+
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g,''));
+  return lines.slice(1).map(line => {
+    const vals = line.split(',').map(v => v.trim().replace(/^"|"$/g,''));
+    const obj = {};
+    headers.forEach((h,i) => obj[h] = vals[i] || '');
+    return obj;
+  }).filter(r => Object.values(r).some(v => v));
+}
+
+function renderCSVPreview(records) {
+  document.getElementById('csv-preview-section').style.display = '';
+  document.getElementById('csv-preview-count').textContent = `${records.length} records`;
+  const sample = records.slice(0, 15);
+  if (!sample.length) { document.getElementById('csv-preview-table').innerHTML = '<div class="empty-state">No records parsed</div>'; return; }
+  const cols = Object.keys(sample[0]);
+  let html = '<table><thead><tr>' + cols.map(c=>`<th>${c}</th>`).join('') + '</tr></thead><tbody>';
+  sample.forEach(r => { html += '<tr>' + cols.map(c=>`<td>${r[c]||'—'}</td>`).join('') + '</tr>'; });
+  html += '</tbody></table>';
+  document.getElementById('csv-preview-table').innerHTML = html;
+}
+
+async function runCSVPipeline() {
+  if (!parsedCSVData.length) { toast('No CSV data loaded', 'error'); return; }
+  const btn = document.getElementById('run-csv-btn');
+  btn.textContent = '⏳ Starting...'; btn.disabled = true;
+  try {
+    const payload = parsedCSVData.map(r => ({
+      vendor: r.vendor || r.Vendor || '',
+      amount: parseFloat(r.amount || r.Amount || 0),
+      currency: r.currency || r.Currency || 'INR',
+      department: r.department || r.Department || '',
+      category: r.category || r.Category || '',
+      transaction_date: r.transaction_date || r.date || new Date().toISOString().split('T')[0],
+      source: 'csv_upload'
+    }));
+    const data = await apiFetch('/ingest/batch', { method: 'POST', body: JSON.stringify(payload) });
+    document.getElementById('csv-process-id').textContent = data.process_id || '—';
+    document.getElementById('pipeline-result-csv').style.display = '';
+    toast('CSV pipeline started! ' + parsedCSVData.length + ' records', 'success');
+  } catch(e) {
+    toast('Failed: ' + e.message, 'error');
+  } finally {
+    btn.textContent = '▶ Run Pipeline'; btn.disabled = false;
+  }
+}
+
+// ===== PIPELINE =====
+let pipelineProcesses = [];
+
+async function loadPipelineProcesses() {
+  try {
+    const d = await apiFetch('/logs/processes?limit=50');
+    pipelineProcesses = d.processes || [];
+    const sel = document.getElementById('pipeline-process-sel');
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">All processes</option>' +
+      pipelineProcesses.map(p => `<option value="${p.process_id}">${shortProcess(p.process_id)} · ${fmtDate(p.started_at)} (${p.record_count||0} steps)</option>`).join('');
+    if (cur) sel.value = cur;
+  } catch(e) {}
+}
+
+async function refreshPipeline() {
+  const pid = document.getElementById('pipeline-process-sel').value;
+  await Promise.all([
+    loadBusEvents(),
+    loadExecutionLogs(pid),
+    updateAgentGrid(pid),
+  ]);
+}
+
+async function loadPipelineForProcess() { await refreshPipeline(); }
+
+async function loadBusEvents() {
+  try {
+    const d = await apiFetch('/bus/events?limit=50');
+    const events = d.events || [];
+    document.getElementById('events-count').textContent = events.length + ' events';
+    const topicCounts = {};
+    events.forEach(e => { topicCounts[e.topic] = (topicCounts[e.topic]||0)+1; });
+    const topicsRow = document.getElementById('topics-row');
+    topicsRow.innerHTML = TOPICS.map(t => `
+      <div class="topic-pill">
+        <div class="topic-dot"></div>
+        <span class="topic-name">${t}</span>
+        <span class="topic-count">${topicCounts[t]||0}</span>
+      </div>`).join('');
+    const tbody = document.getElementById('events-table-body');
+    if (!events.length) { tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No events</td></tr>'; return; }
+    tbody.innerHTML = events.slice(0,50).map(e => `
+      <tr>
+        <td class="mono text-muted">${fmtDate(e.timestamp||e.ts)}</td>
+        <td><span class="badge badge-purple" style="font-size:10px">${e.topic||'—'}</span></td>
+        <td class="text-sm">${agentShortName(e.source_agent)}</td>
+        <td class="mono text-muted text-xs">${shortProcess(e.process_id)}</td>
+      </tr>`).join('');
+  } catch(e) {}
+}
+
+async function loadExecutionLogs(pid='') {
+  try {
+    const url = pid ? `/logs/${pid}` : '/logs?limit=100';
+    const d = await apiFetch(url);
+    const logs = d.logs || [];
+    const success = logs.filter(l=>l.status==='success').length;
+    const errors = logs.filter(l=>l.status==='error').length;
+    const avg = logs.length ? (logs.reduce((s,l)=>s+(l.duration_ms||0),0)/logs.length).toFixed(0) : 0;
+    document.getElementById('pl-steps').textContent = logs.length;
+    document.getElementById('pl-success').textContent = success;
+    document.getElementById('pl-errors').textContent = errors;
+    document.getElementById('pl-duration').textContent = avg;
+    document.getElementById('exec-log-count').textContent = logs.length + ' entries';
+    const tbody = document.getElementById('exec-log-body');
+    if (!logs.length) { tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No logs</td></tr>'; return; }
+    tbody.innerHTML = logs.slice(0,100).map(l => `
+      <tr>
+        <td style="font-size:12px;font-weight:500">${agentShortName(l.agent_name)}</td>
+        <td>${statusBadge(l.status)}</td>
+        <td class="mono text-muted">${l.duration_ms != null ? l.duration_ms+'ms' : '—'}</td>
+        <td class="mono text-xs text-muted">${shortProcess(l.process_id)}</td>
+      </tr>`).join('');
+  } catch(e) {}
+}
+
+async function updateAgentGrid(pid='') {
+  try {
+    const url = pid ? `/logs/${pid}` : '/logs?limit=500';
+    const d = await apiFetch(url);
+    const logs = d.logs || [];
+    const agentStats = {};
+    logs.forEach(l => {
+      const k = l.agent_name;
+      if (!agentStats[k]) agentStats[k] = {count:0, errors:0, totalMs:0, lastMs:null};
+      agentStats[k].count++;
+      if (l.status==='error') agentStats[k].errors++;
+      if (l.duration_ms) { agentStats[k].totalMs += l.duration_ms; agentStats[k].lastMs = l.duration_ms; }
+    });
+    const grid = document.getElementById('agent-grid');
+    grid.innerHTML = AGENT_NAMES.map(a => {
+      const key = `agent_${a.num}_${a.name.toLowerCase().replace(/ /g,'_')}`;
+      const altKey = Object.keys(agentStats).find(k=>k.includes(a.num));
+      const stats = agentStats[key] || (altKey ? agentStats[altKey] : null);
+      const active = stats && stats.count > 0;
+      const hasError = stats && stats.errors > 0;
+      const statusClass = hasError ? 'error' : (active ? 'active' : 'idle');
+      const avgMs = stats && stats.count ? (stats.totalMs/stats.count).toFixed(0) : '—';
+      return `
+        <div class="agent-card">
+          <div class="agent-card-header">
+            <div class="agent-num">${a.num}</div>
+            <div>
+              <div class="agent-name">${a.name}</div>
+              <div class="agent-role">${a.role}</div>
+            </div>
+            <div class="status-indicator ${statusClass}"></div>
+          </div>
+          <div class="agent-stat">Runs: <span>${stats?stats.count:0}</span></div>
+          <div class="agent-stat">Avg: <span>${avgMs}${avgMs!=='—'?'ms':''}</span></div>
+          ${stats&&stats.errors>0?`<div class="agent-stat" style="color:var(--danger)">Errors: <span style="color:var(--danger)">${stats.errors}</span></div>`:''}
+        </div>`;
+    }).join('');
+  } catch(e) {}
+}
+
+function toggleAutoRefresh(btn) {
+  btn.classList.toggle('on');
+  if (btn.classList.contains('on')) {
+    autoRefreshInterval = setInterval(refreshPipeline, 5000);
+    toast('Auto-refresh enabled (5s)', 'info');
+  } else {
+    clearInterval(autoRefreshInterval);
+    toast('Auto-refresh disabled', 'info');
+  }
+}
+
+// ===== ANOMALIES =====
+let allAnomalies = [];
+
+async function loadAnomalies() {
+  document.getElementById('anom-table-loading').style.display = 'flex';
+  document.getElementById('anom-table-wrap').style.display = 'none';
+  try {
+    const statusFilter = document.getElementById('anom-status-filter').value;
+    const url = statusFilter ? `/anomalies?status=${statusFilter}&limit=500` : '/anomalies?limit=500';
+    const d = await apiFetch(url);
+    allAnomalies = d.anomalies || [];
+    const typeFilter = document.getElementById('anom-type-filter').value;
+    const minAps = parseFloat(document.getElementById('anom-aps-filter').value) || 0;
+    let filtered = allAnomalies;
+    if (typeFilter) filtered = filtered.filter(a => a.anomaly_type === typeFilter);
+    if (minAps > 0) filtered = filtered.filter(a => (a.aps_score||0) >= minAps);
+    renderAnomalyMetrics(filtered);
+    renderAnomalyCharts(filtered);
+    renderAnomalyTable(filtered);
+    loadPendingApprovals();
+    checkPendingApprovals();
+  } catch(e) {
+    document.getElementById('anom-table-loading').innerHTML = `<span style="color:var(--danger)">${e.message}</span>`;
+  }
+}
+
+function renderAnomalyMetrics(anomalies) {
+  const total = anomalies.length;
+  const pending = anomalies.filter(a=>a.status==='pending'||a.status==='pending_approval'||a.approval_needed).length;
+  const resolved = anomalies.filter(a=>a.status==='auto_resolved'||a.status==='approved').length;
+  const exposure = anomalies.reduce((s,a)=>s+(a.amount||0),0);
+  const avgAps = total ? (anomalies.reduce((s,a)=>s+(a.aps_score||0),0)/total).toFixed(2) : 0;
+  document.getElementById('am-total').textContent = total;
+  document.getElementById('am-pending').textContent = pending;
+  document.getElementById('am-resolved').textContent = resolved;
+  document.getElementById('am-exposure').textContent = fmtINRShort(exposure);
+  document.getElementById('am-avg-aps').textContent = avgAps;
+}
+
+function renderAnomalyCharts(anomalies) {
+  const types = {};
+  const exposureByType = {};
+  anomalies.forEach(a => {
+    const t = a.anomaly_type || 'unknown';
+    types[t] = (types[t]||0)+1;
+    exposureByType[t] = (exposureByType[t]||0)+(a.amount||0);
+  });
+  const typeLabels = Object.keys(types);
+  const typeColors = typeLabels.map(t => TYPE_COLORS[t] || '#94a3b8');
+
+  destroyChart('anom-type');
+  const ctx1 = document.getElementById('chart-anom-type').getContext('2d');
+  charts['anom-type'] = new Chart(ctx1, {
+    type: 'bar',
+    data: { labels: typeLabels.map(t=>t.replace(/_/g,' ')), datasets:[{ data: typeLabels.map(t=>types[t]), backgroundColor: typeColors, borderRadius:4 }]},
+    options: { indexAxis:'y', plugins:{legend:{display:false}}, scales:{x:{grid:{color:'#1e1e3a'},ticks:{color:'#94a3b8'}},y:{grid:{display:false},ticks:{color:'#94a3b8',font:{size:11}}}}, responsive:true, maintainAspectRatio:false }
+  });
+
+  destroyChart('anom-exposure');
+  const ctx2 = document.getElementById('chart-anom-exposure').getContext('2d');
+  charts['anom-exposure'] = new Chart(ctx2, {
+    type: 'doughnut',
+    data: { labels: typeLabels.map(t=>t.replace(/_/g,' ')), datasets:[{ data: typeLabels.map(t=>exposureByType[t]||0), backgroundColor: typeColors, borderWidth:0, hoverOffset:8 }]},
+    options: { plugins:{legend:{position:'bottom',labels:{color:'#94a3b8',font:{size:11},boxWidth:12}}}, responsive:true, maintainAspectRatio:false, cutout:'65%' }
+  });
+
+  const apsBuckets = [0,1,2,3,4,5,6,7,8,9];
+  const apsCounts = apsBuckets.map(b => anomalies.filter(a=>(a.aps_score||0)>=b&&(a.aps_score||0)<b+1).length);
+  destroyChart('aps-dist');
+  const ctx3 = document.getElementById('chart-aps-dist').getContext('2d');
+  charts['aps-dist'] = new Chart(ctx3, {
+    type: 'bar',
+    data: { labels: apsBuckets.map(b=>`${b}-${b+1}`), datasets:[{ label:'Count', data: apsCounts, backgroundColor: apsBuckets.map(b=>b>=4?'rgba(239,68,68,0.7)':'rgba(124,58,237,0.6)'), borderRadius:4 }]},
+    options: { plugins:{legend:{display:false}}, scales:{x:{grid:{color:'#1e1e3a'},ticks:{color:'#94a3b8',font:{size:10}}},y:{grid:{color:'#1e1e3a'},ticks:{color:'#94a3b8'}}}, responsive:true, maintainAspectRatio:false }
+  });
+}
+
+function renderAnomalyTable(anomalies) {
+  document.getElementById('anom-table-count').textContent = anomalies.length + ' anomalies';
+  document.getElementById('anom-table-loading').style.display = 'none';
+  document.getElementById('anom-table-wrap').style.display = '';
+  const tbody = document.getElementById('anom-table-body');
+  if (!anomalies.length) {
+    tbody.innerHTML = '<tr><td colspan="10" class="empty-state">No anomalies found</td></tr>';
+    return;
+  }
+  tbody.innerHTML = anomalies.map(a => {
+    const typeClass = 'type-' + (a.anomaly_type||'');
+    const needsApproval = a.approval_needed || a.status === 'pending_approval';
+    return `
+      <tr class="${typeClass}">
+        <td>${typeBadge(a.anomaly_type)}</td>
+        <td style="font-weight:500">${a.vendor||'—'}</td>
+        <td>${fmtINR(a.amount)}</td>
+        <td class="text-sm text-muted">${a.department||'—'}</td>
+        <td><span style="font-weight:700;color:${(a.as_score||0)>=7?'var(--danger)':(a.as_score||0)>=4?'var(--warning)':'var(--success)'}">${fmtNum(a.as_score)}</span></td>
+        <td><span style="font-weight:700;color:${(a.aps_score||0)>=4?'var(--danger)':'var(--text)'}">${fmtNum(a.aps_score)}</span></td>
+        <td>${Math.round((a.confidence||0)*100)}%</td>
+        <td>${a.complexity||'—'}</td>
+        <td>${statusBadge(a.status)}</td>
+        <td>${needsApproval && (a.status==='pending'||a.status==='pending_approval') ?
+          `<button class="btn btn-success btn-xs" onclick="openApprovalModal('${a.anomaly_id}','${a.vendor||''}',${a.amount||0},'${a.anomaly_type||''}')">Approve</button>` :
+          `<span class="text-muted text-xs">${a.status==='auto_resolved'?'Auto-resolved':'—'}</span>`
+        }</td>
+      </tr>`;
+  }).join('');
+}
+
+async function loadPendingApprovals() {
+  try {
+    const d = await apiFetch('/anomalies/pending-approval');
+    const pending = d.anomalies || [];
+    const section = document.getElementById('approval-gate-section');
+    document.getElementById('approval-count').textContent = pending.length + ' pending';
+    if (!pending.length) { section.style.display = 'none'; return; }
+    section.style.display = '';
+    document.getElementById('approval-list').innerHTML = pending.map(a => `
+      <div class="approval-card">
+        <div class="approval-card-header">
+          <div>
+            <div style="font-weight:600;margin-bottom:6px;">${typeBadge(a.anomaly_type)} ${a.vendor||'Unknown'}</div>
+            <div class="approval-meta">
+              <div>Amount: <strong>${fmtINR(a.amount)}</strong></div>
+              <div>APS: <strong style="color:var(--danger)">${fmtNum(a.aps_score)}</strong></div>
+              <div>AS: <strong>${fmtNum(a.as_score)}</strong></div>
+              <div>Complexity: <strong>${a.complexity}</strong></div>
+              <div>Dept: <strong>${a.department||'—'}</strong></div>
+            </div>
+            ${a.root_cause?`<div style="margin-top:8px;font-size:12px;color:var(--muted);font-style:italic;">"${a.root_cause.substring(0,200)}${a.root_cause.length>200?'...':''}"</div>`:''}
+          </div>
+          <button class="btn btn-success btn-sm" onclick="openApprovalModal('${a.anomaly_id}','${a.vendor||''}',${a.amount||0},'${a.anomaly_type||''}')">✅ Approve</button>
+        </div>
+      </div>`).join('');
+  } catch(e) {}
+}
+
+// ===== SUMMARY =====
+async function loadSummaryProcesses() {
+  try {
+    const d = await apiFetch('/logs/processes?limit=50');
+    const processes = d.processes || [];
+    const sel = document.getElementById('summary-process-sel');
+    sel.innerHTML = '<option value="">All runs (aggregate)</option>' +
+      processes.map(p => `<option value="${p.process_id}">${shortProcess(p.process_id)} · ${fmtDate(p.started_at)}</option>`).join('');
+  } catch(e) {}
+}
+
+async function loadSummary() {
+  const pid = document.getElementById('summary-process-sel').value;
+  const url = pid ? `/summary?process_id=${pid}` : '/summary';
+  try {
+    const d = await apiFetch(url);
+    document.getElementById('s-exposure').textContent = fmtINRShort(d.total_exposure_inr);
+    document.getElementById('s-recovered').textContent = fmtINRShort(d.total_recovered_inr);
+    document.getElementById('s-pending').textContent = fmtINRShort(d.pending_exposure_inr);
+    document.getElementById('s-rate').textContent = fmtPct(d.recovery_rate_pct);
+
+    const breakdown = d.anomaly_breakdown || {};
+    const bLabels = Object.keys(breakdown);
+    const bValues = bLabels.map(k=>breakdown[k]);
+    const bColors = bLabels.map(k=>TYPE_COLORS[k]||'#94a3b8');
+    destroyChart('summary-breakdown');
+    const ctx1 = document.getElementById('chart-summary-breakdown').getContext('2d');
+    charts['summary-breakdown'] = new Chart(ctx1, {
+      type: 'bar',
+      data: { labels: bLabels.map(l=>l.replace(/_/g,' ')), datasets:[{data:bValues,backgroundColor:bColors,borderRadius:4}]},
+      options: { indexAxis:'y', plugins:{legend:{display:false}}, scales:{x:{grid:{color:'#1e1e3a'},ticks:{color:'#94a3b8'}},y:{grid:{display:false},ticks:{color:'#94a3b8',font:{size:11}}}}, responsive:true, maintainAspectRatio:false }
+    });
+
+    const statusDist = d.status_distribution || {};
+    const sLabels = Object.keys(statusDist);
+    const sColors = {'pending':'#f59e0b','approved':'#10b981','auto_resolved':'#10b981','rejected':'#ef4444','pending_approval':'#f59e0b'};
+    destroyChart('summary-status');
+    const ctx2 = document.getElementById('chart-summary-status').getContext('2d');
+    charts['summary-status'] = new Chart(ctx2, {
+      type: 'doughnut',
+      data: { labels: sLabels.map(l=>l.replace(/_/g,' ')), datasets:[{data:sLabels.map(k=>statusDist[k]),backgroundColor:sLabels.map(k=>sColors[k]||'#94a3b8'),borderWidth:0,hoverOffset:8}]},
+      options: { plugins:{legend:{position:'bottom',labels:{color:'#94a3b8',font:{size:11},boxWidth:12}}}, responsive:true, maintainAspectRatio:false, cutout:'65%' }
+    });
+
+    const agentStats = d.agent_stats || {};
+    const tbody = document.getElementById('agent-health-table');
+    if (!Object.keys(agentStats).length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No agent stats</td></tr>';
+    } else {
+      tbody.innerHTML = Object.entries(agentStats).map(([name, stats]) => `
+        <tr>
+          <td style="font-weight:500;font-size:12px">${agentShortName(name)}</td>
+          <td>${stats.events||0}</td>
+          <td style="color:${(stats.errors||0)>0?'var(--danger)':'var(--muted)'}">${stats.errors||0}</td>
+          <td class="mono">${stats.avg_duration_ms!=null?stats.avg_duration_ms.toFixed(0)+'ms':'—'}</td>
+          <td><div class="status-indicator ${(stats.events||0)>0?'active':'idle'}" style="display:inline-block"></div></td>
+        </tr>`).join('');
+    }
+
+    const top = d.top_anomaly;
+    const topCard = document.getElementById('top-anomaly-card');
+    if (top && top.anomaly_id) {
+      topCard.style.display = '';
+      document.getElementById('top-anomaly-content').innerHTML = `
+        <div style="margin-bottom:14px;">${typeBadge(top.anomaly_type)} ${statusBadge(top.status)}</div>
+        <div class="grid-2" style="gap:12px;margin-bottom:14px;">
+          <div><div class="text-muted text-xs">Vendor</div><div style="font-weight:700;font-size:18px;margin-top:2px">${top.vendor||'—'}</div></div>
+          <div><div class="text-muted text-xs">Amount</div><div style="font-weight:700;font-size:18px;color:var(--danger);margin-top:2px">${fmtINR(top.amount)}</div></div>
+          <div><div class="text-muted text-xs">APS Score</div><div style="font-weight:700;font-size:18px;color:var(--warning);margin-top:2px">${fmtNum(top.aps_score)}</div></div>
+          <div><div class="text-muted text-xs">AS Score</div><div style="font-weight:700;font-size:18px;margin-top:2px">${fmtNum(top.as_score)}</div></div>
+        </div>
+        ${top.root_cause?`
+          <div class="text-muted text-xs mb-4">Root Cause Analysis</div>
+          <div style="font-size:13px;color:var(--text);line-height:1.7;background:var(--surface);padding:12px;border-radius:8px;border:1px solid var(--border);">${top.root_cause}</div>
+        `:''}`;
+    } else {
+      topCard.style.display = 'none';
+    }
+  } catch(e) {
+    toast('Failed to load summary: ' + e.message, 'error');
+  }
+}
+
+// ===== LOGS =====
+let logProcesses = [];
+let logData = [];
+
+async function loadLogProcesses() {
+  try {
+    const d = await apiFetch('/logs/processes?limit=50');
+    logProcesses = d.processes || [];
+    const sel = document.getElementById('logs-process-sel');
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">Select a process...</option>' +
+      logProcesses.map(p => `<option value="${p.process_id}">${shortProcess(p.process_id)} · ${fmtDate(p.started_at)} (${p.record_count||0} steps)</option>`).join('');
+    if (cur) { sel.value = cur; loadProcessLogs(); }
+  } catch(e) {}
+}
+
+async function loadProcessLogs() {
+  const pid = document.getElementById('logs-process-sel').value;
+  if (!pid) { logData = []; renderLogTable([]); return; }
+  document.getElementById('log-table-loading').style.display = 'flex';
+  try {
+    const d = await apiFetch(`/logs/${pid}`);
+    logData = d.logs || [];
+    renderLogMetrics(logData);
+    renderWaterfall(logData);
+    renderLogTable(logData);
+    document.getElementById('payload-inspector').innerHTML = '<div class="empty-state"><div class="empty-icon">🔍</div>Select a log row to inspect input/output payload</div>';
+    document.getElementById('selected-step-label').textContent = 'Click a row';
+  } catch(e) {
+    toast('Failed to load logs: ' + e.message, 'error');
+  } finally {
+    document.getElementById('log-table-loading').style.display = 'none';
+  }
+}
+
+function renderLogMetrics(logs) {
+  const errors = logs.filter(l=>l.status==='error').length;
+  const agents = new Set(logs.map(l=>l.agent_name)).size;
+  const totalMs = logs.reduce((s,l)=>s+(l.duration_ms||0),0);
+  document.getElementById('lg-steps').textContent = logs.length;
+  document.getElementById('lg-errors').textContent = errors;
+  document.getElementById('lg-agents').textContent = agents;
+  document.getElementById('lg-total-ms').textContent = totalMs.toLocaleString('en-IN');
+}
+
+function renderWaterfall(logs) {
+  const card = document.getElementById('waterfall-card');
+  if (!logs.length) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  const maxMs = Math.max(...logs.map(l=>l.duration_ms||0), 1);
+  const agentGroups = {};
+  logs.forEach(l => {
+    const k = l.agent_name;
+    if (!agentGroups[k]) agentGroups[k] = {count:0,totalMs:0,errors:0,status:'success'};
+    agentGroups[k].count++;
+    agentGroups[k].totalMs += (l.duration_ms||0);
+    if (l.status==='error') { agentGroups[k].errors++; agentGroups[k].status='error'; }
+  });
+  document.getElementById('waterfall-viz').innerHTML = Object.entries(agentGroups).map(([name,stats]) => {
+    const avgMs = stats.totalMs/stats.count;
+    const pct = Math.max(4, Math.round((avgMs/maxMs)*100));
+    const cls = stats.status==='error' ? 'error' : 'success';
+    return `<div class="wf-row">
+      <div class="wf-label">${agentShortName(name)}</div>
+      <div class="wf-bar-wrap">
+        <div class="wf-bar ${cls}" style="width:${pct}%">${pct>15?avgMs.toFixed(0)+'ms':''}</div>
+      </div>
+      <div class="wf-dur">${avgMs.toFixed(0)}ms</div>
+    </div>`;
+  }).join('');
+}
+
+function renderLogTable(logs) {
+  document.getElementById('log-step-count').textContent = logs.length + ' steps';
+  const tbody = document.getElementById('log-table-body');
+  if (!logs.length) { tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No logs for this process</td></tr>'; return; }
+  tbody.innerHTML = logs.map((l,i) => `
+    <tr onclick="inspectLog(${i})" id="log-row-${i}">
+      <td class="text-muted text-xs">${i+1}</td>
+      <td style="font-size:12px;font-weight:500">${agentShortName(l.agent_name)}</td>
+      <td class="text-xs"><span class="badge badge-muted">${l.topic_in||'—'}</span></td>
+      <td>${statusBadge(l.status)}</td>
+      <td class="mono text-muted">${l.duration_ms!=null?l.duration_ms+'ms':'—'}</td>
+    </tr>`).join('');
+}
+
+function inspectLog(idx) {
+  document.querySelectorAll('#log-table-body tr').forEach(r=>r.classList.remove('selected'));
+  const row = document.getElementById(`log-row-${idx}`);
+  if (row) row.classList.add('selected');
+  const log = logData[idx];
+  if (!log) return;
+  document.getElementById('selected-step-label').textContent = agentShortName(log.agent_name);
+  const inp = JSON.stringify(log.input_payload||{}, null, 2);
+  const out = JSON.stringify(log.output_payload||{}, null, 2);
+  document.getElementById('payload-inspector').innerHTML = `
+    <div style="margin-bottom:12px;">
+      <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em;">Input Payload</div>
+      <div class="json-viewer">${escapeHtml(inp)}</div>
+    </div>
+    <div>
+      <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em;">Output Payload</div>
+      <div class="json-viewer">${escapeHtml(out)}</div>
+    </div>`;
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ===== INIT =====
+async function init() {
+  buildAgentGrid();
+  await checkHealth();
+  const hash = window.location.hash.replace('#','') || 'dashboard';
+  const validPages = ['dashboard','input','pipeline','anomalies','summary','logs'];
+  const page = validPages.includes(hash) ? hash : 'dashboard';
+  navigate(page);
+  setInterval(checkHealth, 30000);
+  setInterval(checkPendingApprovals, 15000);
+  if (document.getElementById('auto-refresh-toggle').classList.contains('on')) {
+    autoRefreshInterval = setInterval(() => { if(currentPage==='pipeline') refreshPipeline(); }, 5000);
+  }
+}
+
+function buildAgentGrid() {
+  const grid = document.getElementById('agent-grid');
+  grid.innerHTML = AGENT_NAMES.map(a => `
+    <div class="agent-card">
+      <div class="agent-card-header">
+        <div class="agent-num">${a.num}</div>
+        <div>
+          <div class="agent-name">${a.name}</div>
+          <div class="agent-role">${a.role}</div>
+        </div>
+        <div class="status-indicator idle"></div>
+      </div>
+      <div class="agent-stat">Runs: <span>0</span></div>
+      <div class="agent-stat">Avg: <span>—</span></div>
+    </div>`).join('');
+}
+
+window.addEventListener('hashchange', () => {
+  const hash = window.location.hash.replace('#','') || 'dashboard';
+  navigate(hash);
+});
+
+document.getElementById('modal-overlay').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

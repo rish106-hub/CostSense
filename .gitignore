@@ -40,6 +40,12 @@ logs/
 *.csv
 !data/sample*.csv
 
+# Generated tooling
+graphify-out/
+
+# Local project memory (Claude Code)
+CLAUDE.md
+
 # Database
 *.db
 *.sqlite3
